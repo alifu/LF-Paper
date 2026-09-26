@@ -93,6 +93,45 @@ final class CodeTextViewCoordinatorTests {
         #expect(coordinator.undoManager(for: textView) !== firstUndo)
     }
 
+    @Test func switchingBackToADocumentRestoresItsUndoHistoryAndSelection() {
+        let first = UUID()
+        coordinator.update(text: "first", documentID: first, fileKind: nil)
+        let firstUndo = coordinator.undoManager(for: textView)
+        textView.setSelectedRange(NSRange(location: 2, length: 3))
+
+        coordinator.update(text: "second", documentID: UUID(), fileKind: nil)
+        coordinator.update(text: "first", documentID: first, fileKind: nil)
+
+        #expect(coordinator.undoManager(for: textView) === firstUndo)
+        #expect(textView.selectedRange() == NSRange(location: 2, length: 3))
+    }
+
+    @Test func closedDocumentsForgetTheirUndoHistory() {
+        let first = UUID()
+        let second = UUID()
+        coordinator.update(text: "first", documentID: first, fileKind: nil)
+        let firstUndo = coordinator.undoManager(for: textView)
+
+        coordinator.update(text: "second", documentID: second, fileKind: nil, openDocumentIDs: [second])
+        coordinator.update(text: "first", documentID: first, fileKind: nil)
+
+        #expect(coordinator.undoManager(for: textView) !== firstUndo)
+    }
+
+    @Test func changingTheFontSizeRestylesAllText() throws {
+        let id = UUID()
+        coordinator.update(text: "# Title\nplain", documentID: id, fileKind: .markdown)
+
+        coordinator.update(text: "# Title\nplain", documentID: id, fileKind: .markdown, fontSize: 18)
+
+        let storage = try #require(textView.textStorage)
+        for index in 0..<storage.length {
+            let font = storage.attribute(.font, at: index, effectiveRange: nil) as? NSFont
+            #expect(font?.pointSize == 18, "font size at \(index)")
+        }
+        #expect((textView.typingAttributes[.font] as? NSFont)?.pointSize == 18)
+    }
+
     // MARK: Appearance (regression: loaded text had no attributes and drew black in dark mode)
 
     /// Every character uses the theme's font and the appearance-adaptive text color.

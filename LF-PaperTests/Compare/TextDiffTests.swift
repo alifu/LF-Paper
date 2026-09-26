@@ -70,4 +70,17 @@ struct TextDiffTests {
         #expect(result.map(\.isChange) == [false, true, false, true, true])
         #expect(SideBySideRows.changeStarts(in: result) == [1, 3])
     }
+
+    // MARK: Accessibility
+
+    @Test func rowsDescribeTheirChangeForVoiceOver() {
+        let rows = SideBySideRows.make(from: TextDiff.lines(from: "a\nb\nc\n", to: "a\nB\nc\nd\n"))
+
+        #expect(rows.map(\.accessibilityDescription) == [
+            "Line 1: a",
+            "Removed line 2: b. Added line 2: B",
+            "Line 3: c",
+            "Added line 4: d",
+        ])
+    }
 }

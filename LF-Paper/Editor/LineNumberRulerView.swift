@@ -11,10 +11,7 @@ final class LineNumberRulerView: NSRulerView {
     private static let horizontalPadding: CGFloat = 8
     private static let minimumDigits = 3
 
-    private let labelAttributes: [NSAttributedString.Key: Any] = [
-        .font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular),
-        .foregroundColor: NSColor.secondaryLabelColor,
-    ]
+    private var labelAttributes = LineNumberRulerView.labelAttributes(fontSize: 11)
     private weak var textView: NSTextView?
     private var lineIndex = LineIndex(text: "")
 
@@ -36,6 +33,20 @@ final class LineNumberRulerView: NSRulerView {
     }
 
     override var isFlipped: Bool { true }
+
+    /// Line numbers are drawn a little smaller than the editor text.
+    func matchEditorFontSize(_ editorFontSize: CGFloat) {
+        labelAttributes = Self.labelAttributes(fontSize: max(editorFontSize - 2, 9))
+        updateThickness()
+        needsDisplay = true
+    }
+
+    private static func labelAttributes(fontSize: CGFloat) -> [NSAttributedString.Key: Any] {
+        [
+            .font: NSFont.monospacedDigitSystemFont(ofSize: fontSize, weight: .regular),
+            .foregroundColor: NSColor.secondaryLabelColor,
+        ]
+    }
 
     /// Re-counts lines. The editor calls this whenever the characters change.
     func textDidChange() {

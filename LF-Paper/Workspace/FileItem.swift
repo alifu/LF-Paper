@@ -26,6 +26,15 @@ nonisolated enum FileKind: Sendable, Equatable {
         }
     }
 
+    /// What VoiceOver says after the name.
+    var accessibilityName: String {
+        switch self {
+        case .folder: "folder"
+        case .markdown: "Markdown file"
+        case .json: "JSON file"
+        }
+    }
+
     var systemImage: String {
         switch self {
         case .folder: "folder"

@@ -16,7 +16,15 @@ enum UnsavedChangesPrompt {
         "Do you want to save the changes you made to “\(fileName)”?"
     }
 
-    static func message(windowCount: Int) -> String {
-        "You have unsaved changes in \(windowCount) windows. Do you want to save them?"
+    static func message(fileCount: Int) -> String {
+        "You have unsaved changes in \(fileCount) files. Do you want to save them?"
+    }
+
+    /// Names the file when there's only one.
+    static func message(for documents: [OpenDocument]) -> String {
+        if documents.count == 1, let name = documents.first?.url.lastPathComponent {
+            return message(fileName: name)
+        }
+        return message(fileCount: documents.count)
     }
 }

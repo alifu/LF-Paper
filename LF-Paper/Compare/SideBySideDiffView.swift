@@ -62,6 +62,9 @@ private struct DiffRowView: View {
                     .frame(width: 3)
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(row.accessibilityDescription)
+        .accessibilityAddTraits(isFocused ? .isSelected : [])
     }
 }
 

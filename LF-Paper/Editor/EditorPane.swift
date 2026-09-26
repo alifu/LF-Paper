@@ -8,6 +8,7 @@ import SwiftUI
 /// The editor column: the open document, or a hint when nothing is open.
 struct EditorPane: View {
     let model: WorkspaceModel
+    @AppStorage(AppSettings.Key.editorFontSize) private var fontSize = AppSettings.defaultFontSize
 
     var body: some View {
         if let document = model.document {
@@ -25,6 +26,8 @@ struct EditorPane: View {
                     text: document.text,
                     documentID: document.id,
                     fileKind: FileKind(fileExtension: document.url.pathExtension),
+                    fontSize: CGFloat(AppSettings.clampedFontSize(fontSize)),
+                    openDocumentIDs: Set(model.tabs.map(\.id)),
                     revealRequest: model.revealRequest,
                     onTextChange: { model.updateDocumentText($0) }
                 )

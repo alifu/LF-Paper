@@ -27,6 +27,7 @@ final class WorkspaceRegistryTests {
     private func makeModel(editing: Bool) throws -> WorkspaceModel {
         let model = WorkspaceModel(
             bookmarkStore: BookmarkStore(defaults: defaults),
+            recentFolders: RecentFolders(defaults: defaults),
             watchesFileSystem: false
         )
         model.openFolder(folder.url)

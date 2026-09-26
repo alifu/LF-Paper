@@ -78,6 +78,25 @@ nonisolated struct SideBySideRow: Identifiable, Equatable, Sendable {
     var isChange: Bool {
         left?.kind != .same || right?.kind != .same
     }
+
+    /// What VoiceOver reads for the row, since the colors alone carry the meaning.
+    var accessibilityDescription: String {
+        if let left, left.kind == .same {
+            return "Line \(left.lineNumber): \(left.text)"
+        }
+        return [left, right].compactMap { $0?.accessibilityDescription }.joined(separator: ". ")
+    }
+}
+
+private extension DiffCell {
+    nonisolated var accessibilityDescription: String {
+        let change = switch kind {
+        case .removed: "Removed line"
+        case .added: "Added line"
+        case .same: "Line"
+        }
+        return "\(change) \(lineNumber): \(text)"
+    }
 }
 
 nonisolated enum SideBySideRows {

@@ -58,6 +58,7 @@ struct CompareView: View {
                 Image(systemName: "arrow.left.arrow.right")
             }
             .help("Swap sides")
+            .accessibilityLabel("Swap Sides")
             card(for: .right, label: "Right (new)")
         }
         .padding(10)
@@ -110,10 +111,12 @@ struct CompareView: View {
             } label: {
                 Image(systemName: "chevron.up")
             }
+            .accessibilityLabel("Previous Change")
             .keyboardShortcut(.upArrow, modifiers: [.command, .option])
             .help("Previous change (⌥⌘↑)")
             Text(changeCounter)
                 .monospacedDigit()
+                .accessibilityIdentifier("change-counter")
                 .foregroundStyle(.secondary)
                 .frame(minWidth: 80)
             Button {
@@ -121,6 +124,7 @@ struct CompareView: View {
             } label: {
                 Image(systemName: "chevron.down")
             }
+            .accessibilityLabel("Next Change")
             .keyboardShortcut(.downArrow, modifiers: [.command, .option])
             .help("Next change (⌥⌘↓)")
         }

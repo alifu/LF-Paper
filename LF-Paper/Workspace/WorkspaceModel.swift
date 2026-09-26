@@ -8,12 +8,12 @@ import Observation
 import os
 
 /// State for one workspace window: the open folder, its lazily loaded tree,
-/// the selection and the open document.
+/// the selection and the open files (tabs).
 @Observable
 final class WorkspaceModel {
-    /// Something that would replace the open document and so waits for a decision about unsaved changes.
+    /// Something that would throw away unsaved changes and so waits for a decision first.
     enum PendingAction: Equatable {
-        case openFile(URL)
+        case closeTab(UUID)
         case openFolder(URL)
     }
 
@@ -48,15 +48,13 @@ final class WorkspaceModel {
     /// Loaded folder contents. Only the root and expanded folders are kept up to date.
     private(set) var childrenByFolder: [URL: [FileItem]] = [:]
     private(set) var expandedFolders: Set<URL> = []
-    private(set) var document: OpenDocument? {
+    private var openTabs: DocumentTabs = .empty {
         didSet { json.documentDidChange(document) }
     }
     /// Validation and tree for the open document when it's JSON.
     let json = JSONSession()
     /// The latest request for the editor to select and show a range (a JSON error or tree value).
     private(set) var revealRequest: RevealRequest?
-    /// The open file was deleted on disk while it had unsaved changes. Saving recreates it.
-    private(set) var isDocumentMissingOnDisk = false
     private(set) var pendingAction: PendingAction?
     var selection: URL? {
         didSet {
@@ -71,9 +69,14 @@ final class WorkspaceModel {
     var isFolderPickerPresented = false
     var editorLayout: EditorLayout = .split
     var presentedError: AppError?
+    /// How long to wait after typing stops before saving automatically; `nil` turns autosave off.
+    var autosaveDelay: Duration?
+    /// The pending autosave; tests await it.
+    @ObservationIgnored private(set) var autosaveTask: Task<Void, Never>?
 
     @ObservationIgnored private let fileService: any FileService
     @ObservationIgnored private let bookmarkStore: BookmarkStore
+    @ObservationIgnored private let recentFolders: RecentFolders
     @ObservationIgnored private let watchesFileSystem: Bool
     @ObservationIgnored private var rootAccess: SecurityScopedAccess?
     @ObservationIgnored private var watcher: FileWatcher?
@@ -81,15 +84,49 @@ final class WorkspaceModel {
     init(
         fileService: any FileService = LocalFileService(),
         bookmarkStore: BookmarkStore = BookmarkStore(),
+        recentFolders: RecentFolders = .shared,
         watchesFileSystem: Bool = true
     ) {
         self.fileService = fileService
         self.bookmarkStore = bookmarkStore
+        self.recentFolders = recentFolders
         self.watchesFileSystem = watchesFileSystem
     }
 
-    var hasUnsavedChanges: Bool {
-        document?.isDirty == true || isDocumentMissingOnDisk
+    /// The open files, in tab order.
+    var tabs: [OpenDocument] { openTabs.documents }
+
+    /// The file in the active tab.
+    var document: OpenDocument? { openTabs.active }
+
+    /// Whether any tab has unsaved changes.
+    var hasUnsavedChanges: Bool { openTabs.hasUnsavedChanges }
+
+    var activeTabHasUnsavedChanges: Bool {
+        document.map { openTabs.hasUnsavedChanges($0.id) } ?? false
+    }
+
+    /// The active file was deleted on disk while it had unsaved changes. Saving recreates it.
+    var isDocumentMissingOnDisk: Bool {
+        document.map { openTabs.missingOnDisk.contains($0.id) } ?? false
+    }
+
+    func hasUnsavedChanges(inTab id: UUID) -> Bool {
+        openTabs.hasUnsavedChanges(id)
+    }
+
+    /// Open files with unsaved changes, in tab order.
+    var unsavedDocuments: [OpenDocument] {
+        tabs.filter { openTabs.hasUnsavedChanges($0.id) }
+    }
+
+    /// The files the pending prompt is about.
+    var pendingActionDocuments: [OpenDocument] {
+        switch pendingAction {
+        case .closeTab(let id): openTabs.document(withID: id).map { [$0] } ?? []
+        case .openFolder: unsavedDocuments
+        case nil: []
+        }
     }
 
     // MARK: Opening
@@ -125,24 +162,57 @@ final class WorkspaceModel {
     func resolvePendingAction(_ decision: UnsavedChangesDecision) {
         guard let action = pendingAction else { return }
         pendingAction = nil
-        switch decision {
-        case .save:
-            if save() { perform(action) } else { cancel(action) }
-        case .discard:
+        switch (decision, action) {
+        case (.save, .closeTab(let id)):
+            if save(id) { removeTab(id) }
+        case (.save, .openFolder(let url)):
+            if saveAll() { performOpenFolder(url) }
+        case (.discard, .closeTab(let id)):
+            removeTab(id)
+        case (.discard, .openFolder(let url)):
             discardUnsavedChanges()
-            perform(action)
-        case .cancel:
-            cancel(action)
+            performOpenFolder(url)
+        case (.cancel, _):
+            break
         }
     }
 
+    /// Reverts every tab to its saved text; tabs whose file is gone are closed.
     func discardUnsavedChanges() {
-        if isDocumentMissingOnDisk {
-            document = nil
-            isDocumentMissingOnDisk = false
-        } else {
-            document = document?.reverted()
+        for id in openTabs.missingOnDisk {
+            openTabs = openTabs.closing(id)
         }
+        for document in tabs where document.isDirty {
+            openTabs = openTabs.replacing(document.reverted())
+        }
+    }
+
+    // MARK: Tabs
+
+    func activateTab(_ id: UUID) {
+        openTabs = openTabs.activating(id)
+        syncSelectionWithActiveTab()
+    }
+
+    func activateNextTab() {
+        openTabs.neighbour(offset: 1).map(activateTab)
+    }
+
+    func activatePreviousTab() {
+        openTabs.neighbour(offset: -1).map(activateTab)
+    }
+
+    /// Closes a tab, first asking about unsaved changes.
+    func closeTab(_ id: UUID) {
+        guard !openTabs.hasUnsavedChanges(id) else {
+            pendingAction = .closeTab(id)
+            return
+        }
+        removeTab(id)
+    }
+
+    func closeActiveTab() {
+        document.map { closeTab($0.id) }
     }
 
     // MARK: Tree
@@ -154,7 +224,7 @@ final class WorkspaceModel {
     /// The loaded item at `url`, matched by path so spelling differences
     /// (like a trailing slash) don't matter.
     func item(at url: URL) -> FileItem? {
-        childrenByFolder.values.lazy.flatMap { $0 }.first { Self.isSamePath($0.url, url) }
+        childrenByFolder.values.lazy.flatMap { $0 }.first { $0.url.refersToSameFile(as: url) }
     }
 
     func setExpanded(_ folder: URL, _ isExpanded: Bool) {
@@ -186,7 +256,7 @@ final class WorkspaceModel {
         if let selection, !fileService.exists(selection) {
             self.selection = nil
         }
-        syncDocumentWithDisk()
+        syncDocumentsWithDisk()
     }
 
     /// Where "New File"/"New Folder" go: the folder itself, or the folder containing the file.
@@ -194,6 +264,11 @@ final class WorkspaceModel {
         guard let item else { return rootURL }
         if item.isFolder { return item.url }
         return childrenByFolder.first { $0.value.contains(item) }?.key ?? item.url.deletingLastPathComponent()
+    }
+
+    /// Where File › New puts items: next to the selected file, inside the selected folder, or at the root.
+    var newItemFolder: URL? {
+        targetFolder(for: selection.flatMap(item(at:)))
     }
 
     // MARK: File operations
@@ -209,10 +284,10 @@ final class WorkspaceModel {
     func rename(_ item: FileItem, to newName: String) {
         do throws(AppError) {
             let renamed = try fileService.rename(item.url, to: newName)
-            if let document, Self.isSamePath(document.url, item.url) {
-                self.document = document.moving(to: renamed)
+            if let renamedDocument = openTabs.document(at: item.url) {
+                openTabs = openTabs.replacing(renamedDocument.moving(to: renamed))
             }
-            let wasSelected = selection.map { Self.isSamePath($0, item.url) } ?? false
+            let wasSelected = selection?.refersToSameFile(as: item.url) ?? false
             reloadAll()
             if wasSelected {
                 selection = self.item(at: renamed)?.url ?? renamed
@@ -238,12 +313,14 @@ final class WorkspaceModel {
     }
 
     func updateDocumentText(_ text: String) {
-        document = document?.editing(text)
+        guard let document else { return }
+        openTabs = openTabs.replacing(document.editing(text))
+        scheduleAutosave()
     }
 
-    /// A file's text, including unsaved edits when it's the open document. Presents read errors.
+    /// A file's text, including unsaved edits when it's open in a tab. Presents read errors.
     func text(of item: FileItem) -> String? {
-        if let document, Self.isSamePath(document.url, item.url) {
+        if let document = openTabs.document(at: item.url) {
             return document.text
         }
         do throws(AppError) {
@@ -259,19 +336,16 @@ final class WorkspaceModel {
         revealRequest = RevealRequest(range: range, focusesEditor: focusesEditor)
     }
 
-    /// Writes unsaved changes. Returns `false` (and presents the error) if the write failed.
+    /// Writes the active tab's unsaved changes. Returns `false` (and presents the error) if the write failed.
     @discardableResult
     func save() -> Bool {
-        guard let document, hasUnsavedChanges else { return true }
-        do throws(AppError) {
-            try fileService.write(document.text, to: document.url)
-            self.document = document.markingSaved()
-            isDocumentMissingOnDisk = false
-            return true
-        } catch {
-            present(error)
-            return false
-        }
+        document.map { save($0.id) } ?? true
+    }
+
+    /// Writes every tab with unsaved changes, stopping at the first failure.
+    @discardableResult
+    func saveAll() -> Bool {
+        unsavedDocuments.allSatisfy { save($0.id) }
     }
 
     // MARK: Private
@@ -289,69 +363,99 @@ final class WorkspaceModel {
         rootURL = url
         childrenByFolder = [url: items]
         expandedFolders = []
-        document = nil
-        isDocumentMissingOnDisk = false
+        openTabs = .empty
         selection = nil
         remember(url)
         startWatching(url)
     }
 
-    private func perform(_ action: PendingAction) {
-        switch action {
-        case .openFile(let url): openFile(at: url)
-        case .openFolder(let url): performOpenFolder(url)
+    private func save(_ id: UUID) -> Bool {
+        guard let document = openTabs.document(withID: id), openTabs.hasUnsavedChanges(id) else { return true }
+        do throws(AppError) {
+            try fileService.write(document.text, to: document.url)
+            openTabs = openTabs.replacing(document.markingSaved()).marking(id, missingOnDisk: false)
+            return true
+        } catch {
+            present(error)
+            return false
         }
     }
 
-    private func cancel(_ action: PendingAction) {
-        guard case .openFile = action else { return }
-        // Put the highlight back on the file that's still open.
-        selection = document.map { item(at: $0.url)?.url ?? $0.url }
+    private func removeTab(_ id: UUID) {
+        openTabs = openTabs.closing(id)
+        syncSelectionWithActiveTab()
     }
 
+    /// Highlights the active tab's file in the sidebar (or nothing when no tab is open).
+    private func syncSelectionWithActiveTab() {
+        let url = document.map { item(at: $0.url)?.url ?? $0.url }
+        if selection != url { selection = url }
+    }
+
+    /// Opening a file shows its tab, adding one if it isn't open yet.
     private func selectionDidChange() {
         guard let selection,
               let item = item(at: selection),
-              !item.isFolder,
-              !isOpen(item.url)
+              !item.isFolder
         else { return }
-        guard !hasUnsavedChanges else {
-            pendingAction = .openFile(item.url)
-            return
+        if let open = openTabs.document(at: item.url) {
+            openTabs = openTabs.activating(open.id)
+        } else {
+            openFile(at: item.url)
         }
-        openFile(at: item.url)
     }
 
     private func openFile(at url: URL) {
         do throws(AppError) {
-            document = OpenDocument(url: url, text: try fileService.read(url))
-            isDocumentMissingOnDisk = false
+            openTabs = openTabs.opening(OpenDocument(url: url, text: try fileService.read(url)))
         } catch {
             present(error)
         }
     }
 
-    private func isOpen(_ url: URL) -> Bool {
-        document.map { Self.isSamePath($0.url, url) } ?? false
-    }
-
-    /// Unedited documents follow the disk; edited ones are never overwritten or dropped.
-    private func syncDocumentWithDisk() {
-        guard let document else { return }
-        guard fileService.exists(document.url) else {
-            if document.isDirty {
-                isDocumentMissingOnDisk = true
-            } else {
-                self.document = nil
-            }
+    /// Saves every edited tab once typing has paused for `autosaveDelay`.
+    /// Files deleted on disk are left for the user to recreate deliberately.
+    private func scheduleAutosave() {
+        autosaveTask?.cancel()
+        guard let autosaveDelay else {
+            autosaveTask = nil
             return
         }
-        isDocumentMissingOnDisk = false
+        autosaveTask = Task { [weak self] in
+            try? await Task.sleep(for: autosaveDelay) // a cancelled sleep ends early; checked below
+            guard !Task.isCancelled, let self else { return }
+            for document in self.tabs where document.isDirty && !self.openTabs.missingOnDisk.contains(document.id) {
+                _ = self.save(document.id)
+            }
+        }
+    }
+
+    /// Unedited tabs follow the disk; edited ones are never overwritten or dropped.
+    private func syncDocumentsWithDisk() {
+        let activeFileBefore = document?.url
+        for document in tabs {
+            syncWithDisk(document)
+        }
+        // Only move the sidebar highlight when the active tab closed; a folder the user
+        // selected shouldn't jump away on every outside change.
+        if document?.url != activeFileBefore {
+            syncSelectionWithActiveTab()
+        }
+    }
+
+    private func syncWithDisk(_ document: OpenDocument) {
+        guard fileService.exists(document.url) else {
+            openTabs = document.isDirty
+                ? openTabs.marking(document.id, missingOnDisk: true)
+                : openTabs.closing(document.id)
+            return
+        }
+        openTabs = openTabs.marking(document.id, missingOnDisk: false)
         guard !document.isDirty else { return }
         do throws(AppError) {
             let diskText = try fileService.read(document.url)
             if diskText != document.text {
-                self.document = OpenDocument(url: document.url, text: diskText)
+                openTabs = openTabs.reloading(document.id, with: OpenDocument(url: document.url, text: diskText))
             }
         } catch {
             present(error)
@@ -399,6 +503,7 @@ final class WorkspaceModel {
     }
 
     private func remember(_ folder: URL) {
+        recentFolders.add(folder)
         do throws(AppError) {
             try bookmarkStore.save(folder)
         } catch {
@@ -420,9 +525,5 @@ final class WorkspaceModel {
     private func present(_ error: AppError) {
         Self.logger.error("Workspace operation failed: \(String(describing: error))")
         presentedError = error
-    }
-
-    private static func isSamePath(_ lhs: URL, _ rhs: URL) -> Bool {
-        lhs.standardizedFileURL.pathComponents == rhs.standardizedFileURL.pathComponents
     }
 }

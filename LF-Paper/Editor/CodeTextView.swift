@@ -7,12 +7,15 @@ import AppKit
 import SwiftUI
 
 /// Plain-text code editor on a TextKit 1 `NSTextView`: monospaced, line numbers, find bar,
-/// a separate undo history per document, and syntax highlighting of the lines being edited.
+/// a separate undo history (and selection) per open document, and syntax highlighting of the lines being edited.
 struct CodeTextView: NSViewRepresentable {
     let text: String
-    /// Changing this loads `text` as a new document and starts a fresh undo history.
+    /// Changing this loads `text` as another document, with that document's own undo history.
     let documentID: UUID
     let fileKind: FileKind?
+    var fontSize: CGFloat = EditorTheme.defaultFontSize
+    /// Documents still open in tabs; the undo histories of all others are dropped.
+    var openDocumentIDs: Set<UUID>? = nil
     /// Selects and scrolls to a range once per request (e.g. a JSON error or a tree value).
     var revealRequest: RevealRequest?
     let onTextChange: @MainActor (String) -> Void
@@ -24,13 +27,24 @@ struct CodeTextView: NSViewRepresentable {
     func makeNSView(context: Context) -> NSScrollView {
         let views = Self.makeEditorViews()
         context.coordinator.attach(textView: views.textView, ruler: views.ruler)
-        context.coordinator.update(text: text, documentID: documentID, fileKind: fileKind, revealRequest: revealRequest)
+        updateCoordinator(context.coordinator)
         return views.scrollView
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         context.coordinator.onTextChange = onTextChange
-        context.coordinator.update(text: text, documentID: documentID, fileKind: fileKind, revealRequest: revealRequest)
+        updateCoordinator(context.coordinator)
+    }
+
+    private func updateCoordinator(_ coordinator: Coordinator) {
+        coordinator.update(
+            text: text,
+            documentID: documentID,
+            fileKind: fileKind,
+            revealRequest: revealRequest,
+            fontSize: fontSize,
+            openDocumentIDs: openDocumentIDs
+        )
     }
 
     /// The scroll view, text view and line-number ruler, configured and connected.
@@ -71,6 +85,7 @@ struct CodeTextView: NSViewRepresentable {
         textView.isAutomaticSpellingCorrectionEnabled = false
         textView.isAutomaticLinkDetectionEnabled = false
         textView.isContinuousSpellCheckingEnabled = false
+        textView.setAccessibilityIdentifier("editor")
 
         let theme = EditorTheme.standard
         textView.font = theme.font
@@ -86,6 +101,12 @@ extension CodeTextView {
         /// Bigger documents are shown as plain text so typing stays responsive.
         private static let highlightingLimit = 2_000_000
 
+        /// What's kept for a document while another tab is showing.
+        private struct DocumentState {
+            let undoManager: UndoManager
+            let selectedRange: NSRange
+        }
+
         var onTextChange: @MainActor (String) -> Void
         private weak var textView: NSTextView?
         private weak var ruler: LineNumberRulerView?
@@ -93,9 +114,10 @@ extension CodeTextView {
         private var fileKind: FileKind?
         private var highlighter: (any SyntaxHighlighter)?
         private var undoManager = UndoManager()
+        private var savedStates: [UUID: DocumentState] = [:]
         private var isReplacingText = false
         private var lastRevealID: UUID?
-        private let theme = EditorTheme.standard
+        private var theme = EditorTheme.standard
 
         init(onTextChange: @escaping @MainActor (String) -> Void) {
             self.onTextChange = onTextChange
@@ -108,30 +130,56 @@ extension CodeTextView {
             textView.textStorage?.delegate = self
         }
 
-        /// Loads text for a new document (with a fresh undo history). For the same document, text
-        /// changed outside the editor (Format, Minify, revert) is applied as an undoable edit.
-        /// Typing reaches the model through `textDidChange` instead.
-        func update(text: String, documentID: UUID, fileKind: FileKind?, revealRequest: RevealRequest? = nil) {
+        /// Loads text for another document (restoring its undo history and selection if it was shown
+        /// before). For the same document, text changed outside the editor (Format, Minify, revert)
+        /// is applied as an undoable edit. Typing reaches the model through `textDidChange` instead.
+        func update(
+            text: String,
+            documentID: UUID,
+            fileKind: FileKind?,
+            revealRequest: RevealRequest? = nil,
+            fontSize: CGFloat = EditorTheme.defaultFontSize,
+            openDocumentIDs: Set<UUID>? = nil
+        ) {
             guard let textView else { return }
             let isNewDocument = documentID != self.documentID
             let isNewKind = fileKind != self.fileKind
+            let isNewFontSize = fontSize != theme.font.pointSize
+            if isNewDocument, let previousID = self.documentID {
+                savedStates[previousID] = DocumentState(undoManager: undoManager, selectedRange: textView.selectedRange())
+            }
+            if let openDocumentIDs {
+                savedStates = savedStates.filter { openDocumentIDs.contains($0.key) }
+            }
             self.documentID = documentID
             self.fileKind = fileKind
             if isNewKind {
                 highlighter = SyntaxHighlighters.highlighter(for: fileKind)
             }
+            if isNewFontSize {
+                theme = EditorTheme(fontSize: fontSize)
+                textView.font = theme.font
+                textView.typingAttributes = theme.baseAttributes
+                ruler?.matchEditorFontSize(fontSize)
+            }
 
             if isNewDocument {
-                replaceText(in: textView, with: text)
-                textView.setSelectedRange(NSRange(location: 0, length: 0))
-                textView.scrollRangeToVisible(NSRange(location: 0, length: 0))
+                show(text, restoring: savedStates.removeValue(forKey: documentID), in: textView)
             } else if textView.string != text {
                 applyUndoableEdit(in: textView, replacingAllWith: text)
-            } else if isNewKind, let storage = textView.textStorage {
-                // Renamed to another file type: same text, different highlighting.
+            } else if isNewKind || isNewFontSize, let storage = textView.textStorage {
+                // Renamed to another file type, or a new font size: same text, restyled.
                 applyStyle(to: NSRange(location: 0, length: storage.length), in: storage)
             }
             reveal(revealRequest, in: textView)
+        }
+
+        private func show(_ text: String, restoring state: DocumentState?, in textView: NSTextView) {
+            replaceText(in: textView, with: text)
+            undoManager = state?.undoManager ?? UndoManager()
+            let selection = Self.clamped(state?.selectedRange ?? NSRange(location: 0, length: 0), toLength: (text as NSString).length)
+            textView.setSelectedRange(selection)
+            textView.scrollRangeToVisible(selection)
         }
 
         private func applyUndoableEdit(in textView: NSTextView, replacingAllWith text: String) {
@@ -147,9 +195,7 @@ extension CodeTextView {
         private func reveal(_ request: RevealRequest?, in textView: NSTextView) {
             guard let request, request.id != lastRevealID else { return }
             lastRevealID = request.id
-            let length = (textView.string as NSString).length
-            let location = min(max(request.range.location, 0), length)
-            let range = NSRange(location: location, length: min(max(request.range.length, 0), length - location))
+            let range = Self.clamped(request.range, toLength: (textView.string as NSString).length)
             textView.setSelectedRange(range)
             textView.scrollRangeToVisible(range)
             if request.focusesEditor {
@@ -160,9 +206,12 @@ extension CodeTextView {
             }
         }
 
+        private static func clamped(_ range: NSRange, toLength length: Int) -> NSRange {
+            let location = min(max(range.location, 0), length)
+            return NSRange(location: location, length: min(max(range.length, 0), length - location))
+        }
+
         private func replaceText(in textView: NSTextView, with text: String) {
-            // Old undo steps refer to text that is no longer there.
-            undoManager = UndoManager()
             isReplacingText = true
             textView.string = text
             isReplacingText = false

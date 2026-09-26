@@ -21,6 +21,7 @@ struct CompareSourceCard: View {
             HStack(spacing: 8) {
                 Image(systemName: "curlybraces")
                     .foregroundStyle(.purple)
+                    .accessibilityHidden(true)
                 Text(source?.title ?? "Not set")
                     .fontWeight(.medium)
                     .lineLimit(1)
@@ -38,6 +39,7 @@ struct CompareSourceCard: View {
                         Image(systemName: "xmark")
                     }
                     .help("Clear this side")
+                    .accessibilityLabel("Clear \(label)")
                 }
             }
         }

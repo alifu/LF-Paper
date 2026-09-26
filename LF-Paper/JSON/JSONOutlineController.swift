@@ -53,6 +53,7 @@ final class JSONOutlineController: NSObject {
         outlineView.addTableColumn(column)
         outlineView.outlineTableColumn = column
         outlineView.headerView = nil
+        outlineView.setAccessibilityIdentifier("json-tree")
         outlineView.style = .plain
         outlineView.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
         outlineView.rowHeight = Self.rowHeight

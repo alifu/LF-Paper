@@ -10,22 +10,29 @@ import UniformTypeIdentifiers
 
 /// Main window: folder sidebar | editor | optional preview.
 struct WorkspaceView: View {
-    @State private var model = WorkspaceModel()
+    @State private var model = Self.makeModel()
     @State private var window: NSWindow?
+    @AppStorage(AppSettings.Key.autosaves) private var autosaves = false
 
     var body: some View {
         NavigationSplitView {
             SidebarView(model: model)
                 .navigationSplitViewColumnWidth(min: 180, ideal: 240, max: 400)
         } detail: {
-            HSplitView {
-                if model.editorLayout.showsEditor {
-                    EditorPane(model: model)
-                        .frame(minWidth: 300, maxWidth: .infinity, maxHeight: .infinity)
+            VStack(spacing: 0) {
+                if !model.tabs.isEmpty {
+                    DocumentTabBar(model: model)
+                    Divider()
                 }
-                if model.editorLayout.showsPreview {
-                    PreviewPane(model: model)
-                        .frame(minWidth: 240, maxWidth: .infinity, maxHeight: .infinity)
+                HSplitView {
+                    if model.editorLayout.showsEditor {
+                        EditorPane(model: model)
+                            .frame(minWidth: 300, maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                    if model.editorLayout.showsPreview {
+                        PreviewPane(model: model)
+                            .frame(minWidth: 240, maxWidth: .infinity, maxHeight: .infinity)
+                    }
                 }
             }
         }
@@ -66,22 +73,42 @@ struct WorkspaceView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { notification in
             guard let window, (notification.object as? NSWindow) === window else { return }
             // SwiftUI can't cancel a window close, so keep the user's work rather than lose it.
-            _ = model.save()
+            model.saveAll()
+        }
+        .onChange(of: autosaves, initial: true) { _, autosaves in
+            model.autosaveDelay = autosaves ? AppSettings.autosaveDelay : nil
         }
         .focusedSceneValue(\.workspace, model)
         .task {
             WorkspaceRegistry.shared.register(model)
-            model.restoreLastFolder()
+            openInitialFolder()
         }
+    }
+
+    private static func makeModel() -> WorkspaceModel {
+        #if DEBUG
+        if UITestSupport.isActive { return UITestSupport.makeModel() }
+        #endif
+        return WorkspaceModel()
+    }
+
+    private func openInitialFolder() {
+        #if DEBUG
+        if UITestSupport.isActive, let fixture = UITestSupport.makeFixtureFolder() {
+            model.openFolder(fixture)
+            return
+        }
+        #endif
+        model.restoreLastFolder()
     }
 
     private var subtitle: String {
         guard let name = model.document?.url.lastPathComponent else { return "" }
-        return model.hasUnsavedChanges ? "\(name) — Edited" : name
+        return model.activeTabHasUnsavedChanges ? "\(name) — Edited" : name
     }
 
     private var unsavedChangesMessage: String {
-        UnsavedChangesPrompt.message(fileName: model.document?.url.lastPathComponent ?? "this file")
+        UnsavedChangesPrompt.message(for: model.pendingActionDocuments)
     }
 
     private var isShowingError: Binding<Bool> {

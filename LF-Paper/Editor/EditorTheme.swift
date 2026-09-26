@@ -7,7 +7,8 @@ import AppKit
 
 /// Fonts and colors for the code editor. All colors are system colors, so they adapt to dark mode.
 struct EditorTheme {
-    static let standard = EditorTheme(fontSize: 13)
+    static let defaultFontSize = CGFloat(AppSettings.defaultFontSize)
+    static let standard = EditorTheme(fontSize: defaultFontSize)
 
     let font: NSFont
     private let boldFont: NSFont

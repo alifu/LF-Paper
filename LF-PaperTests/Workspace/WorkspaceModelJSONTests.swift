@@ -24,7 +24,11 @@ final class WorkspaceModelJSONTests {
 
     private func model(opening name: String, contents: String) throws -> WorkspaceModel {
         try folder.makeFile(name, contents: contents)
-        let model = WorkspaceModel(bookmarkStore: BookmarkStore(defaults: defaults), watchesFileSystem: false)
+        let model = WorkspaceModel(
+            bookmarkStore: BookmarkStore(defaults: defaults),
+            recentFolders: RecentFolders(defaults: defaults),
+            watchesFileSystem: false
+        )
         model.openFolder(folder.url)
         model.selection = try #require(model.children(of: folder.url).first { $0.name == name }).url
         return model

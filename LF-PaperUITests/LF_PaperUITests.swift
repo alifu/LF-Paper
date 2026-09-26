@@ -7,37 +7,112 @@
 
 import XCTest
 
+/// The main flows, end to end. The app opens a fresh folder of sample files
+/// (README.md, data.json, other.json) when launched with `-UITestFixture YES`.
 final class LF_PaperUITests: XCTestCase {
+    private static let timeout: TimeInterval = 10
+    private var app: XCUIApplication!
 
     override func setUpWithError() throws {
-        // Put setup code here. This method is called before the invocation of each test method in the class.
-
-        // In UI tests it is usually best to stop immediately when a failure occurs.
         continueAfterFailure = false
-
-        // In UI tests it’s important to set the initial state - such as interface orientation - required for your tests before they run. The setUp method is a good place to do this.
+        app = XCUIApplication()
+        app.launchArguments = ["-UITestFixture", "YES", "-ApplePersistenceIgnoreState", "YES"]
+        app.launch()
     }
 
     override func tearDownWithError() throws {
-        // Put teardown code here. This method is called after the invocation of each test method in the class.
+        app.terminate()
+    }
+
+    // MARK: Helpers
+
+    private func element(_ identifier: String) -> XCUIElement {
+        app.descendants(matching: .any)[identifier].firstMatch
+    }
+
+    @discardableResult
+    private func waitFor(_ identifier: String, file: StaticString = #filePath, line: UInt = #line) -> XCUIElement {
+        let found = element(identifier)
+        XCTAssertTrue(found.waitForExistence(timeout: Self.timeout), "\(identifier) did not appear", file: file, line: line)
+        return found
+    }
+
+    private func openFile(_ name: String) {
+        waitFor("file-\(name)").click()
+        waitFor("tab-\(name)")
+    }
+
+    private func editorText() -> String {
+        waitFor("editor").value as? String ?? ""
+    }
+
+    private func chooseMenuItem(_ item: String, inMenu menu: String) {
+        app.menuBars.menuBarItems[menu].click()
+        app.menuBars.menuItems[item].click()
+    }
+
+    private func waitUntil(_ description: String, _ condition: @escaping () -> Bool) {
+        let predicate = NSPredicate { _, _ in condition() }
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [expectation], timeout: Self.timeout), .completed, description)
+    }
+
+    // MARK: Flows
+
+    @MainActor
+    func testEditAndSaveMarkdown() throws {
+        openFile("README.md")
+        XCTAssertTrue(editorText().hasPrefix("# Fixture"))
+
+        let editor = waitFor("editor")
+        editor.click()
+        editor.typeKey(.downArrow, modifierFlags: .command) // end of the document
+        editor.typeText("More text.")
+        let tab = waitFor("tab-README.md")
+        waitUntil("the tab shows unsaved changes") { tab.label == "README.md, edited" }
+
+        editor.typeKey("s", modifierFlags: .command)
+        waitUntil("saving clears the edited mark") { tab.label == "README.md" }
+        XCTAssertTrue(editorText().hasSuffix("More text."))
     }
 
     @MainActor
-    func testExample() throws {
-        // UI tests must launch the application that they test.
-        let app = XCUIApplication()
-        app.launch()
+    func testJSONTreeAndFormat() throws {
+        openFile("data.json")
+        let tree = waitFor("json-tree")
+        waitUntil("the tree shows the document") { tree.outlineRows.count > 0 }
 
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
-        // XCUIAutomation Documentation
-        // https://developer.apple.com/documentation/xcuiautomation
+        chooseMenuItem("Format", inMenu: "JSON")
+
+        waitUntil("Format pretty-prints the JSON") { self.editorText().contains("\n  \"name\": \"Ada\",") }
+        XCTAssertEqual(waitFor("tab-data.json").label, "data.json, edited")
     }
 
     @MainActor
-    func testLaunchPerformance() throws {
-        // This measures how long it takes to launch your application.
-        measure(metrics: [XCTApplicationLaunchMetric()]) {
-            XCUIApplication().launch()
-        }
+    func testTabsOpenAndClose() throws {
+        openFile("README.md")
+        openFile("data.json")
+        XCTAssertTrue(element("tab-README.md").exists)
+
+        app.typeKey("w", modifierFlags: .command)
+
+        waitUntil("⌘W closes the active tab") { !self.element("tab-data.json").exists }
+        XCTAssertTrue(element("tab-README.md").exists)
+        XCTAssertTrue(editorText().hasPrefix("# Fixture"))
+    }
+
+    @MainActor
+    func testCompareTwoFiles() throws {
+        waitFor("file-data.json").rightClick()
+        app.menuItems["Compare as Left"].click()
+        app.windows.firstMatch.typeKey("`", modifierFlags: .command) // back to the workspace window
+        waitFor("file-other.json").rightClick()
+        app.menuItems["Compare as Right"].click()
+
+        let counter = waitFor("change-counter")
+        waitUntil("the files are compared") { (counter.value as? String ?? counter.label).contains("change") }
+
+        app.typeKey(.downArrow, modifierFlags: [.command, .option])
+        waitUntil("the first change is focused") { (counter.value as? String ?? counter.label).hasPrefix("1 of") }
     }
 }

@@ -27,6 +27,7 @@ final class WorkspaceModelTests {
         WorkspaceModel(
             fileService: LocalFileService(),
             bookmarkStore: BookmarkStore(defaults: defaults),
+            recentFolders: RecentFolders(defaults: defaults),
             watchesFileSystem: false
         )
     }
@@ -171,48 +172,6 @@ final class WorkspaceModelTests {
         return (model, try item(named: "b.md", in: model))
     }
 
-    @Test func switchingFilesWithUnsavedChangesAsksFirst() throws {
-        let (model, b) = try modelWithUnsavedEdit()
-
-        model.selection = b.url
-
-        #expect(model.pendingAction == .openFile(b.url))
-        #expect(model.document?.url.lastPathComponent == "a.md")
-        #expect(model.hasUnsavedChanges)
-    }
-
-    @Test func savingBeforeSwitchingWritesTheEditsThenOpensTheNewFile() throws {
-        let (model, b) = try modelWithUnsavedEdit()
-        model.selection = b.url
-
-        model.resolvePendingAction(.save)
-
-        #expect(try folder.contents(of: "a.md") == "A edited")
-        #expect(model.document?.text == "B")
-        #expect(model.pendingAction == nil)
-    }
-
-    @Test func discardingBeforeSwitchingOpensTheNewFileWithoutWriting() throws {
-        let (model, b) = try modelWithUnsavedEdit()
-        model.selection = b.url
-
-        model.resolvePendingAction(.discard)
-
-        #expect(try folder.contents(of: "a.md") == "A")
-        #expect(model.document?.text == "B")
-    }
-
-    @Test func cancellingSwitchKeepsTheEditsAndReselectsTheOpenFile() throws {
-        let (model, b) = try modelWithUnsavedEdit()
-        model.selection = b.url
-
-        model.resolvePendingAction(.cancel)
-
-        #expect(model.document?.text == "A edited")
-        #expect(model.selection?.lastPathComponent == "a.md")
-        #expect(model.pendingAction == nil)
-    }
-
     @Test func openingAnotherFolderWithUnsavedChangesAsksFirst() throws {
         let (model, _) = try modelWithUnsavedEdit()
         let other = try TemporaryDirectory()
@@ -336,6 +295,20 @@ final class WorkspaceModelTests {
         #expect(model.targetFolder(for: docs) == docs.url)
         #expect(model.targetFolder(for: guide)?.lastPathComponent == "docs")
         #expect(model.targetFolder(for: nil) == folder.url)
+    }
+
+    @Test func newItemsFromTheMenuGoNextToTheSelection() throws {
+        try folder.makeFile("docs/guide.md")
+        let model = makeModel()
+        #expect(model.newItemFolder == nil) // no folder open
+
+        model.openFolder(folder.url)
+        #expect(model.newItemFolder == folder.url)
+
+        let docs = try item(named: "docs", in: model)
+        model.setExpanded(docs.url, true)
+        model.selection = try item(named: "guide.md", in: model, folder: docs.url).url
+        #expect(model.newItemFolder?.lastPathComponent == "docs")
     }
 
     @Test func renameKeepsTheRenamedFileSelectedAndOpen() throws {

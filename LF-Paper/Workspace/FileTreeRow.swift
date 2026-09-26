@@ -39,5 +39,7 @@ private struct FileLabel: View {
         Label(item.name, systemImage: item.kind.systemImage)
             .lineLimit(1)
             .truncationMode(.middle)
+            .accessibilityLabel("\(item.name), \(item.kind.accessibilityName)")
+            .accessibilityIdentifier("file-\(item.name)")
     }
 }

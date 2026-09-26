@@ -14,7 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         switch askToSave(unsaved) {
         case .save:
             // Stops at the first failed save; that window shows the error and the app stays open.
-            return unsaved.allSatisfy { $0.save() } ? .terminateNow : .terminateCancel
+            return unsaved.allSatisfy { $0.saveAll() } ? .terminateNow : .terminateCancel
         case .discard:
             unsaved.forEach { $0.discardUnsavedChanges() }
             return .terminateNow
@@ -25,11 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func askToSave(_ workspaces: [WorkspaceModel]) -> WorkspaceModel.UnsavedChangesDecision {
         let alert = NSAlert()
-        if workspaces.count == 1, let name = workspaces.first?.document?.url.lastPathComponent {
-            alert.messageText = UnsavedChangesPrompt.message(fileName: name)
-        } else {
-            alert.messageText = UnsavedChangesPrompt.message(windowCount: workspaces.count)
-        }
+        alert.messageText = UnsavedChangesPrompt.message(for: workspaces.flatMap(\.unsavedDocuments))
         alert.informativeText = UnsavedChangesPrompt.informativeText
         alert.addButton(withTitle: UnsavedChangesPrompt.saveTitle)
         alert.addButton(withTitle: UnsavedChangesPrompt.discardTitle)
