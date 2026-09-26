@@ -1,0 +1,72 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+.DocumentRevisions-V100
+.TemporaryItems
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Xcode — user-specific state
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Xcode — build output
+build/
+DerivedData/
+*.xcresult
+*.profraw
+*.gcda
+*.gcno
+
+# Swift Package Manager
+# Package.resolved is kept (committed) so app builds are reproducible.
+.build/
+.swiftpm/
+Packages/
+
+# CocoaPods / Carthage (in case they are added later)
+Pods/
+Carthage/Build/
+Carthage/Checkouts/
+
+# fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# Release artifacts
+*.dmg
+*.pkg
+*.xcarchive
+*.app
+ExportOptions.plist
+
+# Secrets and local config
+.env
+.env.*
+*.p12
+*.cer
+*.mobileprovision
+*.provisionprofile
+*.local.xcconfig
+
+# Editors / tools
+.vscode/
+.idea/
+*.swp
+*~
+.claude/settings.local.json

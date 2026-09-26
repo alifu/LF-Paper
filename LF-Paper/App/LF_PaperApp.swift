@@ -11,7 +11,8 @@ import SwiftUI
 struct LF_PaperApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            WorkspaceView()
         }
+        .defaultSize(width: 1100, height: 700)
     }
 }
