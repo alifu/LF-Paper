@@ -118,6 +118,18 @@ final class CodeTextViewCoordinatorTests {
         #expect(coordinator.undoManager(for: textView) !== firstUndo)
     }
 
+    @Test func reportsSelectionChangesWithTheirDocument() {
+        var reported: [(UUID, NSRange)] = []
+        coordinator.onSelectionChange = { reported.append(($0, $1)) }
+        let id = UUID()
+        coordinator.update(text: "hello world", documentID: id, fileKind: nil)
+
+        textView.setSelectedRange(NSRange(location: 6, length: 5))
+
+        #expect(reported.last?.0 == id)
+        #expect(reported.last?.1 == NSRange(location: 6, length: 5))
+    }
+
     @Test func switchingBetweenTheScratchpadAndAFileKeepsBothUndoHistories() throws {
         let folder = try TemporaryDirectory()
         try folder.makeFile("a.md", contents: "A")

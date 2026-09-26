@@ -128,6 +128,50 @@ final class LF_PaperUITests: XCTestCase {
     }
 
     @MainActor
+    func testQuickOpenOpensAFileByName() throws {
+        waitFor("file-README.md")
+        app.typeKey("p", modifierFlags: .command)
+        let field = waitFor("quick-open-field")
+
+        field.typeText("oth")
+        field.typeKey(.return, modifierFlags: [])
+
+        waitFor("tab-other.json")
+        XCTAssertFalse(element("quick-open-field").exists, "Quick Open closes after opening a file")
+    }
+
+    @MainActor
+    func testFindInFolderOpensTheMatch() throws {
+        waitFor("file-README.md")
+        app.typeKey("f", modifierFlags: [.command, .shift])
+        let field = waitFor("folder-search-field")
+
+        field.typeText("Grace")
+        field.typeKey(.return, modifierFlags: [])
+        let summary = waitFor("folder-search-summary")
+        waitUntil("the search finds one match") { (summary.value as? String ?? summary.label) == "1 match in 1 file" }
+
+        app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Line 1:'")).firstMatch.click()
+        waitFor("tab-other.json")
+    }
+
+    @MainActor
+    func testClosingAWindowWithUnsavedChangesAsksFirst() throws {
+        openFile("README.md")
+        let editor = waitFor("editor")
+        editor.click()
+        editor.typeText("Unsaved.")
+
+        app.windows.firstMatch.buttons[XCUIIdentifierCloseWindow].click()
+        let cancel = app.sheets.buttons["Cancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: Self.timeout), "closing asks about unsaved changes")
+        cancel.click()
+
+        XCTAssertTrue(waitFor("tab-README.md").exists, "Cancel keeps the window open")
+        XCTAssertEqual(waitFor("tab-README.md").label, "README.md, edited")
+    }
+
+    @MainActor
     func testCompareTwoFiles() throws {
         waitFor("file-data.json").rightClick()
         app.menuItems["Compare as Left"].click()

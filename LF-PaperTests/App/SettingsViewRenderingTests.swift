@@ -11,7 +11,7 @@ import Testing
 /// Renders the Settings window offscreen, in dark and light mode. It only reads the settings.
 @MainActor
 struct SettingsViewRenderingTests {
-    private static let size = NSSize(width: 420, height: 220)
+    private static let size = NSSize(width: 420, height: 290)
 
     @Test(arguments: [NSAppearance.Name.darkAqua, .aqua])
     func showsEverySetting(appearance: NSAppearance.Name) throws {

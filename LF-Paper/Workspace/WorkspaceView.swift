@@ -12,10 +12,12 @@ import UniformTypeIdentifiers
 struct WorkspaceView: View {
     @State private var model = Self.makeModel()
     @State private var window: NSWindow?
+    @State private var closeGuard: WindowCloseGuard?
+    @State private var columnVisibility = NavigationSplitViewVisibility.automatic
     @AppStorage(AppSettings.Key.autosaves) private var autosaves = false
 
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarView(model: model)
                 .navigationSplitViewColumnWidth(min: 180, ideal: 240, max: 400)
         } detail: {
@@ -33,6 +35,11 @@ struct WorkspaceView: View {
                             .frame(minWidth: 240, maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
+            }
+        }
+        .overlay(alignment: .top) {
+            if model.isQuickOpenPresented {
+                quickOpen
             }
         }
         .navigationTitle(model.rootURL?.lastPathComponent ?? "LF-Paper")
@@ -67,22 +74,47 @@ struct WorkspaceView: View {
             Text(UnsavedChangesPrompt.informativeText)
         }
         .background(WindowReader { window = $0 })
+        .onChange(of: window) { attachCloseGuard() }
         .onChange(of: model.hasUnsavedChanges) { _, hasUnsavedChanges in
             window?.isDocumentEdited = hasUnsavedChanges // the dot in the close button
+            attachCloseGuard() // in case SwiftUI set up the window again since
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { notification in
             guard let window, (notification.object as? NSWindow) === window else { return }
-            // SwiftUI can't cancel a window close, so keep the user's work rather than lose it.
+            // The close guard has asked already; this only catches closes that skip it.
             model.saveAll()
+            model.saveTabSession()
         }
         .onChange(of: autosaves, initial: true) { _, autosaves in
             model.autosaveDelay = autosaves ? AppSettings.autosaveDelay : nil
+        }
+        .onChange(of: model.searchFocusRequest) {
+            columnVisibility = .all // Find in Folder needs the sidebar
         }
         .focusedSceneValue(\.workspace, model)
         .task {
             WorkspaceRegistry.shared.register(model)
             openInitialFolder()
         }
+    }
+
+    /// The Quick Open panel near the top of the window; clicking outside it closes it.
+    private var quickOpen: some View {
+        ZStack(alignment: .top) {
+            Color.black.opacity(0.001)
+                .onTapGesture { model.isQuickOpenPresented = false }
+                .accessibilityHidden(true)
+            QuickOpenPanel(model: model)
+                .padding(.top, 48)
+        }
+    }
+
+    /// Asks about unsaved changes (or saves them, per Settings) before the window closes.
+    private func attachCloseGuard() {
+        guard let window else { return }
+        let guardian = closeGuard ?? WindowCloseGuard(model: model)
+        closeGuard = guardian
+        guardian.attach(to: window)
     }
 
     private static func makeModel() -> WorkspaceModel {

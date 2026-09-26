@@ -11,6 +11,7 @@ struct SettingsView: View {
     @AppStorage(AppSettings.Key.editorFontSize) private var fontSize = AppSettings.defaultFontSize
     @AppStorage(AppSettings.Key.jsonIndentation) private var indentation = JSONIndentationSetting.twoSpaces
     @AppStorage(AppSettings.Key.autosaves) private var autosaves = false
+    @AppStorage(AppSettings.Key.unsavedChangesOnClose) private var closeBehavior = UnsavedChangesOnClose.ask
 
     var body: some View {
         Form {
@@ -39,6 +40,14 @@ struct SettingsView: View {
 
             Toggle("Save files automatically", isOn: $autosaves)
             Text("Edits are saved a moment after you stop typing.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Picker("Closing a window:", selection: $closeBehavior) {
+                ForEach(UnsavedChangesOnClose.allCases) { Text($0.title).tag($0) }
+            }
+            .fixedSize()
+            Text("What happens to unsaved changes when you close a window.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

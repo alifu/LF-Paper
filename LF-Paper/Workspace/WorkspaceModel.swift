@@ -43,13 +43,22 @@ final class WorkspaceModel {
     }
 
     private static let logger = Logger(subsystem: "AppWork.LF-Paper", category: "Workspace")
+    /// How many recently opened files Quick Open remembers.
+    private static let recentFilesLimit = 50
 
     private(set) var rootURL: URL?
     /// Loaded folder contents. Only the root and expanded folders are kept up to date.
     private(set) var childrenByFolder: [URL: [FileItem]] = [:]
     private(set) var expandedFolders: Set<URL> = []
     private var openTabs: DocumentTabs = .empty {
-        didSet { json.documentDidChange(document) }
+        didSet {
+            json.documentDidChange(document)
+            // Typing also changes the tabs; only the list and the active tab are remembered.
+            if !isSwitchingFolders,
+               oldValue.documents.map(\.url) != openTabs.documents.map(\.url) || oldValue.active?.url != openTabs.active?.url {
+                saveTabSession()
+            }
+        }
     }
     /// Whether the scratchpad is showing instead of the active file tab.
     private(set) var isScratchpadActive = false {
@@ -63,6 +72,17 @@ final class WorkspaceModel {
     private(set) var scratchpadCopyID: UUID?
     /// The scratchpad's editor identity, stable so it keeps its own undo history.
     let scratchpadID = UUID()
+    /// Every Markdown and JSON file under the folder, for Quick Open and Search in Folder.
+    private(set) var fileIndex: [IndexedFile] = []
+    /// The indexing in progress; tests await it.
+    @ObservationIgnored private(set) var indexTask: Task<Void, Never>?
+    /// Files opened in this window, newest first.
+    private(set) var recentFiles: [URL] = []
+    var isQuickOpenPresented = false
+    var sidebarMode: SidebarMode = .files
+    /// Changes whenever Search in Folder should take keyboard focus.
+    private(set) var searchFocusRequest: UUID?
+    let search = FolderSearchSession()
     /// Validation and tree for the open document when it's JSON.
     let json = JSONSession()
     /// The latest request for the editor to select and show a range (a JSON error or tree value).
@@ -92,16 +112,26 @@ final class WorkspaceModel {
     @ObservationIgnored private let watchesFileSystem: Bool
     @ObservationIgnored private var rootAccess: SecurityScopedAccess?
     @ObservationIgnored private var watcher: FileWatcher?
+    @ObservationIgnored private let tabSessions: TabSessionStore
+    /// The latest editor selection of each open tab, for the tab session.
+    @ObservationIgnored private var editorSelections: [UUID: NSRange] = [:]
+    /// Remembered selections of restored tabs, put back when each tab is first shown.
+    @ObservationIgnored private var pendingSelections: [UUID: NSRange] = [:]
+    /// Set while one folder's tabs are swapped for another's, so neither session is overwritten.
+    @ObservationIgnored private var isSwitchingFolders = false
 
     init(
         fileService: any FileService = LocalFileService(),
         bookmarkStore: BookmarkStore = BookmarkStore(),
         recentFolders: RecentFolders = .shared,
+        tabSessions: TabSessionStore? = nil,
         watchesFileSystem: Bool = true
     ) {
         self.fileService = fileService
         self.bookmarkStore = bookmarkStore
         self.recentFolders = recentFolders
+        // Next to the folder bookmarks by default, so tests with their own settings keep sessions there too.
+        self.tabSessions = tabSessions ?? TabSessionStore(defaults: bookmarkStore.defaults)
         self.watchesFileSystem = watchesFileSystem
     }
 
@@ -207,7 +237,9 @@ final class WorkspaceModel {
     func activateTab(_ id: UUID) {
         isScratchpadActive = false
         openTabs = openTabs.activating(id)
+        document.map { noteOpened($0.url) }
         syncSelectionWithActiveTab()
+        revealPendingSelection()
     }
 
     func activateNextTab() {
@@ -229,6 +261,12 @@ final class WorkspaceModel {
 
     func closeActiveTab() {
         document.map { closeTab($0.id) }
+    }
+
+    /// Edit › Find in Folder (⇧⌘F): shows the search in the sidebar and focuses its field.
+    func showFolderSearch() {
+        sidebarMode = .search
+        searchFocusRequest = UUID()
     }
 
     // MARK: Scratchpad
@@ -305,6 +343,27 @@ final class WorkspaceModel {
             self.selection = nil
         }
         syncDocumentsWithDisk()
+        refreshFileIndex()
+    }
+
+    /// Re-lists every supported file under the folder in the background.
+    func refreshFileIndex() {
+        indexTask?.cancel()
+        guard let rootURL else {
+            fileIndex = []
+            return
+        }
+        let includeHidden = showsHiddenFiles
+        indexTask = Task { [weak self] in
+            let files = await Self.index(rootURL, includeHidden: includeHidden)
+            guard let self, !Task.isCancelled, self.rootURL == rootURL else { return }
+            self.fileIndex = files
+        }
+    }
+
+    @concurrent
+    private static func index(_ root: URL, includeHidden: Bool) async -> [IndexedFile] {
+        FileIndexer.index(root: root, includeHidden: includeHidden)
     }
 
     /// Where "New File"/"New Folder" go: the folder itself, or the folder containing the file.
@@ -380,8 +439,62 @@ final class WorkspaceModel {
     }
 
     /// Asks the editor to select `range` and scroll to it. Each call is a new request.
-    func reveal(_ range: NSRange, focusesEditor: Bool) {
-        revealRequest = RevealRequest(range: range, focusesEditor: focusesEditor)
+    func reveal(_ range: NSRange, focusesEditor: Bool, highlights: Bool = true) {
+        revealRequest = RevealRequest(range: range, focusesEditor: focusesEditor, highlights: highlights)
+    }
+
+    // MARK: Tab session
+
+    /// The editor reports each tab's selection, so it can be restored when the folder reopens.
+    func noteSelection(_ range: NSRange, in documentID: UUID) {
+        editorSelections[documentID] = range
+        pendingSelections[documentID] = nil
+    }
+
+    /// Remembers the folder's tabs, active tab and selections. Also called when the window closes
+    /// and the app quits, because selection changes alone don't save.
+    func saveTabSession() {
+        guard let rootURL else { return }
+        let paths = Dictionary(uniqueKeysWithValues: tabs.compactMap { document in
+            document.url.components(below: rootURL).map { (document.id, $0.joined(separator: "/")) }
+        })
+        let selections = Dictionary(uniqueKeysWithValues: paths.compactMap { id, path in
+            (editorSelections[id] ?? pendingSelections[id]).map { (path, $0) }
+        })
+        let session = TabSession(
+            files: tabs.compactMap { paths[$0.id] },
+            activeFile: openTabs.active.flatMap { paths[$0.id] },
+            selections: selections
+        )
+        tabSessions.save(session, for: rootURL)
+    }
+
+    /// Reopens the folder's remembered tabs; files that are gone are skipped.
+    private func restoreTabSession(for folder: URL) {
+        guard let session = tabSessions.session(for: folder) else { return }
+        var restored = DocumentTabs.empty
+        var activeID: UUID?
+        for path in session.files {
+            let url = folder.appending(path: path, directoryHint: .notDirectory)
+            guard fileService.exists(url) else { continue }
+            do throws(AppError) {
+                let document = OpenDocument(url: url, text: try fileService.read(url))
+                restored = restored.opening(document)
+                pendingSelections[document.id] = session.selections[path]
+                if path == session.activeFile { activeID = document.id }
+            } catch {
+                Self.logger.error("Could not reopen a tab: \(String(describing: error))")
+            }
+        }
+        openTabs = activeID.map(restored.activating) ?? restored
+        syncSelectionWithActiveTab()
+        revealPendingSelection()
+    }
+
+    /// Puts back the remembered selection of the active tab the first time it shows.
+    private func revealPendingSelection() {
+        guard let document, let range = pendingSelections.removeValue(forKey: document.id) else { return }
+        reveal(range, focusesEditor: false, highlights: false)
     }
 
     /// Writes the active tab's unsaved changes. Returns `false` (and presents the error) if the write failed.
@@ -399,6 +512,7 @@ final class WorkspaceModel {
     // MARK: Private
 
     private func performOpenFolder(_ url: URL) {
+        saveTabSession() // the folder being left, with its latest selections
         let access = SecurityScopedAccess(url: url)
         let items: [FileItem]
         do throws(AppError) {
@@ -408,11 +522,20 @@ final class WorkspaceModel {
             return
         }
         rootAccess = access
+        isSwitchingFolders = true
         rootURL = url
         childrenByFolder = [url: items]
         expandedFolders = []
         openTabs = .empty
+        editorSelections = [:]
+        pendingSelections = [:]
         selection = nil
+        restoreTabSession(for: url)
+        isSwitchingFolders = false
+        fileIndex = []
+        recentFiles = []
+        search.reset()
+        refreshFileIndex()
         remember(url)
         startWatching(url)
     }
@@ -452,6 +575,13 @@ final class WorkspaceModel {
         } else {
             openFile(at: item.url)
         }
+        document.map { noteOpened($0.url) }
+        revealPendingSelection()
+    }
+
+    private func noteOpened(_ url: URL) {
+        let others = recentFiles.filter { !$0.refersToSameFile(as: url) }
+        recentFiles = Array(([url] + others).prefix(Self.recentFilesLimit))
     }
 
     private func openFile(at url: URL) {

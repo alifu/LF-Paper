@@ -28,3 +28,20 @@ enum UnsavedChangesPrompt {
         return message(fileCount: documents.count)
     }
 }
+
+extension WorkspaceModel.UnsavedChangesDecision {
+    /// Carries out the answer for quitting or closing a window. Returns whether to go ahead:
+    /// Save writes every file (stopping at the first failure, whose window shows the error),
+    /// Don't Save reverts them, and Cancel stops.
+    func apply(to workspaces: [WorkspaceModel]) -> Bool {
+        switch self {
+        case .save:
+            return workspaces.allSatisfy { $0.saveAll() }
+        case .discard:
+            workspaces.forEach { $0.discardUnsavedChanges() }
+            return true
+        case .cancel:
+            return false
+        }
+    }
+}

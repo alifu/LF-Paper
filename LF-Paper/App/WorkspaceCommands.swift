@@ -30,6 +30,14 @@ struct WorkspaceCommands: Commands {
                 .disabled(workspace == nil)
             openRecentMenu
         }
+        CommandGroup(replacing: .printItem) {
+            Button("Quick Open…") { workspace?.isQuickOpenPresented = true }
+                .keyboardShortcut("p")
+                .disabled(workspace?.rootURL == nil)
+            Button("Find in Folder…") { workspace?.showFolderSearch() }
+                .keyboardShortcut("f", modifiers: [.command, .shift])
+                .disabled(workspace?.rootURL == nil)
+        }
         CommandGroup(replacing: .saveItem) {
             Button(workspace?.document == nil ? "Close" : "Close Tab") { close() }
                 .keyboardShortcut("w")

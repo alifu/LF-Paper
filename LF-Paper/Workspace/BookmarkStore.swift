@@ -12,7 +12,8 @@ nonisolated struct BookmarkStore {
     static let lastFolderKey = "workspace.lastFolderBookmark"
     private static let logger = Logger(subsystem: "AppWork.LF-Paper", category: "Bookmarks")
 
-    private let defaults: UserDefaults
+    /// Where the other per-user workspace state (such as open tabs) is kept too.
+    let defaults: UserDefaults
     private let key: String
 
     init(defaults: UserDefaults = .standard, key: String = BookmarkStore.lastFolderKey) {

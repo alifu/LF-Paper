@@ -11,23 +11,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Self.terminateReply(for: WorkspaceRegistry.shared.workspacesWithUnsavedChanges, ask: askToSave)
     }
 
+    /// Remembers every window's open tabs (with their latest selections) for the next launch.
+    func applicationWillTerminate(_ notification: Notification) {
+        WorkspaceRegistry.shared.workspaces.forEach { $0.saveTabSession() }
+    }
+
     /// Quits right away when nothing is unsaved; otherwise acts on the answer from `ask`.
     static func terminateReply(
         for unsaved: [WorkspaceModel],
         ask: ([WorkspaceModel]) -> WorkspaceModel.UnsavedChangesDecision
     ) -> NSApplication.TerminateReply {
         guard !unsaved.isEmpty else { return .terminateNow }
-
-        switch ask(unsaved) {
-        case .save:
-            // Stops at the first failed save; that window shows the error and the app stays open.
-            return unsaved.allSatisfy { $0.saveAll() } ? .terminateNow : .terminateCancel
-        case .discard:
-            unsaved.forEach { $0.discardUnsavedChanges() }
-            return .terminateNow
-        case .cancel:
-            return .terminateCancel
-        }
+        return ask(unsaved).apply(to: unsaved) ? .terminateNow : .terminateCancel
     }
 
     private func askToSave(_ workspaces: [WorkspaceModel]) -> WorkspaceModel.UnsavedChangesDecision {

@@ -35,7 +35,8 @@ struct EditorPane: View {
                     fontSize: CGFloat(AppSettings.clampedFontSize(fontSize)),
                     openDocumentIDs: model.editorDocumentIDs,
                     revealRequest: model.revealRequest,
-                    onTextChange: content.onTextChange
+                    onTextChange: content.onTextChange,
+                    onSelectionChange: { model.noteSelection($1, in: $0) }
                 )
             }
         } else {

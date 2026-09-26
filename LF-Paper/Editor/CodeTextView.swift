@@ -19,6 +19,8 @@ struct CodeTextView: NSViewRepresentable {
     /// Selects and scrolls to a range once per request (e.g. a JSON error or a tree value).
     var revealRequest: RevealRequest?
     let onTextChange: @MainActor (String) -> Void
+    /// The selection of the showing document, as it changes (for restoring tabs later).
+    var onSelectionChange: @MainActor (UUID, NSRange) -> Void = { _, _ in }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(onTextChange: onTextChange)
@@ -33,6 +35,7 @@ struct CodeTextView: NSViewRepresentable {
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         context.coordinator.onTextChange = onTextChange
+        context.coordinator.onSelectionChange = onSelectionChange
         updateCoordinator(context.coordinator)
     }
 
@@ -108,6 +111,7 @@ extension CodeTextView {
         }
 
         var onTextChange: @MainActor (String) -> Void
+        var onSelectionChange: @MainActor (UUID, NSRange) -> Void = { _, _ in }
         private weak var textView: NSTextView?
         private weak var ruler: LineNumberRulerView?
         private var documentID: UUID?
@@ -201,7 +205,7 @@ extension CodeTextView {
             if request.focusesEditor {
                 textView.window?.makeFirstResponder(textView)
             }
-            if range.length > 0 {
+            if request.highlights, range.length > 0 {
                 textView.showFindIndicator(for: range)
             }
         }
@@ -221,6 +225,11 @@ extension CodeTextView {
 
         func undoManager(for view: NSTextView) -> UndoManager? {
             undoManager
+        }
+
+        func textViewDidChangeSelection(_ notification: Notification) {
+            guard let textView, let documentID else { return }
+            onSelectionChange(documentID, textView.selectedRange())
         }
 
         func textDidChange(_ notification: Notification) {

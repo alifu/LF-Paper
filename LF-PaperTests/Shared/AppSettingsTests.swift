@@ -44,9 +44,23 @@ struct AppSettingsTests {
         #expect(JSONIndentationSetting.allCases.map(\.id) == JSONIndentationSetting.allCases)
     }
 
+    @Test func closingAWindowAsksUnlessSetToSave() throws {
+        let suiteName = "LFPaperTests.\(UUID().uuidString)"
+        defer { UserDefaults.standard.removePersistentDomain(forName: suiteName) }
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+
+        #expect(UnsavedChangesOnClose.current(in: defaults) == .ask)
+        defaults.set(UnsavedChangesOnClose.saveAutomatically.rawValue, forKey: AppSettings.Key.unsavedChangesOnClose)
+        #expect(UnsavedChangesOnClose.current(in: defaults) == .saveAutomatically)
+        defaults.set("something old", forKey: AppSettings.Key.unsavedChangesOnClose)
+        #expect(UnsavedChangesOnClose.current(in: defaults) == .ask)
+        #expect(UnsavedChangesOnClose.allCases.map(\.title) == ["Ask", "Save Automatically"])
+    }
+
     @Test func settingsHaveStableStorageValues() {
         // Changing these would silently reset people's settings.
         #expect(AppAppearance.allCases.map(\.rawValue) == ["system", "light", "dark"])
         #expect(JSONIndentationSetting.allCases.map(\.rawValue) == ["twoSpaces", "fourSpaces", "tab"])
+        #expect(UnsavedChangesOnClose.allCases.map(\.rawValue) == ["ask", "saveAutomatically"])
     }
 }

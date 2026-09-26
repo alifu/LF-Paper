@@ -6,7 +6,8 @@
 import AppKit
 import SwiftUI
 
-/// The folder navigator: a file tree with a context menu for creating, renaming and trashing items.
+/// The folder navigator: a file tree with a context menu for creating, renaming and trashing items,
+/// and Search in Folder in its second mode.
 struct SidebarView: View {
     @Bindable var model: WorkspaceModel
     @Environment(CompareModel.self) private var compareModel
@@ -16,6 +17,23 @@ struct SidebarView: View {
     @State private var trashTarget: FileItem?
 
     var body: some View {
+        VStack(spacing: 0) {
+            Picker("Sidebar", selection: $model.sidebarMode) {
+                Image(systemName: "folder").help("Files").accessibilityLabel("Files").tag(SidebarMode.files)
+                Image(systemName: "magnifyingglass").help("Search in Folder (⇧⌘F)").accessibilityLabel("Search").tag(SidebarMode.search)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            switch model.sidebarMode {
+            case .files: files
+            case .search: FolderSearchView(model: model)
+            }
+        }
+    }
+
+    private var files: some View {
         content
             .alert("Rename", isPresented: isPresenting($renameTarget), presenting: renameTarget) { item in
                 TextField("Name", text: $proposedName)

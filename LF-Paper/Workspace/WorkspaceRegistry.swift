@@ -17,8 +17,12 @@ final class WorkspaceRegistry {
         entries = others + [WeakWorkspace(workspace: workspace)]
     }
 
+    var workspaces: [WorkspaceModel] {
+        entries.compactMap(\.workspace)
+    }
+
     var workspacesWithUnsavedChanges: [WorkspaceModel] {
-        entries.compactMap(\.workspace).filter(\.hasUnsavedChanges)
+        workspaces.filter(\.hasUnsavedChanges)
     }
 }
 

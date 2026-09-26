@@ -12,6 +12,7 @@ nonisolated enum AppSettings {
         static let editorFontSize = "settings.editorFontSize"
         static let jsonIndentation = "settings.jsonIndentation"
         static let autosaves = "settings.autosaves"
+        static let unsavedChangesOnClose = "settings.unsavedChangesOnClose"
     }
 
     enum Zoom {
@@ -88,5 +89,25 @@ nonisolated enum JSONIndentationSetting: String, CaseIterable, Identifiable {
         case .fourSpaces: .spaces(4)
         case .tab: .tab
         }
+    }
+}
+
+/// What closing a window with unsaved changes does.
+nonisolated enum UnsavedChangesOnClose: String, CaseIterable, Identifiable {
+    case ask
+    case saveAutomatically
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .ask: "Ask"
+        case .saveAutomatically: "Save Automatically"
+        }
+    }
+
+    /// The current setting; asking is the default.
+    static func current(in defaults: UserDefaults = .standard) -> UnsavedChangesOnClose {
+        defaults.string(forKey: AppSettings.Key.unsavedChangesOnClose).flatMap(Self.init(rawValue:)) ?? .ask
     }
 }
