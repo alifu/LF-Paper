@@ -14,5 +14,9 @@ struct LF_PaperApp: App {
             WorkspaceView()
         }
         .defaultSize(width: 1100, height: 700)
+        .commands {
+            SidebarCommands()
+            WorkspaceCommands()
+        }
     }
 }

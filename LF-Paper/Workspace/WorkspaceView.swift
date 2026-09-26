@@ -4,18 +4,20 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Main window: folder sidebar | editor | optional preview.
 struct WorkspaceView: View {
+    @State private var model = WorkspaceModel()
     @State private var isPreviewVisible = true
 
     var body: some View {
         NavigationSplitView {
-            SidebarPlaceholder()
+            SidebarView(model: model)
                 .navigationSplitViewColumnWidth(min: 180, ideal: 240, max: 400)
         } detail: {
             HSplitView {
-                EditorPlaceholder()
+                ReadOnlyDocumentView(document: model.document)
                     .frame(minWidth: 300, maxWidth: .infinity, maxHeight: .infinity)
                 if isPreviewVisible {
                     PreviewPlaceholder()
@@ -23,6 +25,8 @@ struct WorkspaceView: View {
                 }
             }
         }
+        .navigationTitle(model.rootURL?.lastPathComponent ?? "LF-Paper")
+        .navigationSubtitle(model.document?.url.lastPathComponent ?? "")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Toggle(isOn: $isPreviewVisible) {
@@ -31,25 +35,26 @@ struct WorkspaceView: View {
                 .help("Show or hide the preview")
             }
         }
-    }
-}
-
-private struct SidebarPlaceholder: View {
-    var body: some View {
-        ContentUnavailableView(
-            "No Folder Open",
-            systemImage: "folder",
-            description: Text("Open a folder to browse its files.")
+        .fileImporter(
+            isPresented: $model.isFolderPickerPresented,
+            allowedContentTypes: [.folder],
+            onCompletion: model.handleFolderPickerResult
         )
+        .alert(isPresented: isShowingError, error: model.presentedError) { _ in
+            Button("OK") {}
+        } message: { error in
+            Text(error.recoverySuggestion ?? "")
+        }
+        .focusedSceneValue(\.workspace, model)
+        .task { model.restoreLastFolder() }
     }
-}
 
-private struct EditorPlaceholder: View {
-    var body: some View {
-        ContentUnavailableView(
-            "No File Selected",
-            systemImage: "doc.text",
-            description: Text("Select a Markdown or JSON file in the sidebar.")
+    private var isShowingError: Binding<Bool> {
+        Binding(
+            get: { model.presentedError != nil },
+            set: { isPresented in
+                if !isPresented { model.presentedError = nil }
+            }
         )
     }
 }

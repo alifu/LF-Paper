@@ -15,6 +15,29 @@ nonisolated enum AppError: Error, Equatable, Sendable {
     case invalidName(String)
 }
 
+nonisolated extension AppError {
+    /// Maps a system error to a user-facing error about `url`.
+    /// Unrecognised errors become `fallback(url)`; `AppError`s pass through unchanged.
+    static func from(_ error: any Error, url: URL, fallback: (URL) -> AppError) -> AppError {
+        if let appError = error as? AppError {
+            return appError
+        }
+        guard let cocoaError = error as? CocoaError else {
+            return fallback(url)
+        }
+        switch cocoaError.code {
+        case .fileNoSuchFile, .fileReadNoSuchFile:
+            return .fileNotFound(url)
+        case .fileReadNoPermission, .fileWriteNoPermission:
+            return .accessDenied(url)
+        case .fileWriteFileExists:
+            return .alreadyExists(url)
+        default:
+            return fallback(url)
+        }
+    }
+}
+
 nonisolated extension AppError: LocalizedError {
     var errorDescription: String? {
         switch self {
