@@ -29,6 +29,13 @@ struct WorkspaceCommands: Commands {
             Toggle("Show Hidden Files", isOn: showsHiddenFiles)
                 .keyboardShortcut(".", modifiers: [.command, .shift])
                 .disabled(workspace == nil)
+            Button(workspace?.editorLayout.showsPreview == true ? "Hide Preview" : "Show Preview") {
+                if let workspace {
+                    workspace.editorLayout = workspace.editorLayout.togglingPreview()
+                }
+            }
+            .keyboardShortcut("p", modifiers: [.command, .option])
+            .disabled(workspace == nil)
         }
     }
 

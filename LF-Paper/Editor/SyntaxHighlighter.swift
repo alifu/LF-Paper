@@ -55,7 +55,9 @@ nonisolated enum TextRanges {
 /// The highlighter for each kind of file.
 enum SyntaxHighlighters {
     static func highlighter(for kind: FileKind?) -> (any SyntaxHighlighter)? {
-        // Markdown rules arrive in Phase 3 and JSON rules in Phase 5; until then files are plain text.
-        nil
+        switch kind {
+        case .markdown: MarkdownHighlighter()
+        case .json, .folder, nil: nil // JSON highlighting arrives with the JSON editor (Phase 5).
+        }
     }
 }

@@ -11,7 +11,6 @@ import UniformTypeIdentifiers
 /// Main window: folder sidebar | editor | optional preview.
 struct WorkspaceView: View {
     @State private var model = WorkspaceModel()
-    @State private var isPreviewVisible = true
     @State private var window: NSWindow?
 
     var body: some View {
@@ -20,10 +19,12 @@ struct WorkspaceView: View {
                 .navigationSplitViewColumnWidth(min: 180, ideal: 240, max: 400)
         } detail: {
             HSplitView {
-                EditorPane(model: model)
-                    .frame(minWidth: 300, maxWidth: .infinity, maxHeight: .infinity)
-                if isPreviewVisible {
-                    PreviewPlaceholder()
+                if model.editorLayout.showsEditor {
+                    EditorPane(model: model)
+                        .frame(minWidth: 300, maxWidth: .infinity, maxHeight: .infinity)
+                }
+                if model.editorLayout.showsPreview {
+                    PreviewPane(model: model)
                         .frame(minWidth: 240, maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
@@ -32,10 +33,13 @@ struct WorkspaceView: View {
         .navigationSubtitle(subtitle)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Toggle(isOn: $isPreviewVisible) {
-                    Label("Preview", systemImage: "sidebar.right")
+                Picker("Layout", selection: $model.editorLayout) {
+                    ForEach(EditorLayout.allCases) { layout in
+                        Label(layout.title, systemImage: layout.systemImage).tag(layout)
+                    }
                 }
-                .help("Show or hide the preview")
+                .pickerStyle(.segmented)
+                .help("Editor, editor and preview, or preview only (⌥⌘P shows or hides the preview)")
             }
         }
         .fileImporter(
@@ -97,13 +101,6 @@ struct WorkspaceView: View {
                 if !isPresented { model.resolvePendingAction(.cancel) }
             }
         )
-    }
-}
-
-private struct PreviewPlaceholder: View {
-    var body: some View {
-        ContentUnavailableView("Preview", systemImage: "eye")
-            .background(.background.secondary)
     }
 }
 

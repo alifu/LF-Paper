@@ -52,6 +52,7 @@ final class WorkspaceModel {
         }
     }
     var isFolderPickerPresented = false
+    var editorLayout: EditorLayout = .split
     var presentedError: AppError?
 
     @ObservationIgnored private let fileService: any FileService

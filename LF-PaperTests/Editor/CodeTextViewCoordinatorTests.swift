@@ -131,6 +131,17 @@ final class CodeTextViewCoordinatorTests {
         expectThemeStyleEverywhere()
     }
 
+    @Test func markdownFilesAreHighlighted() throws {
+        coordinator.update(text: "# Title\nplain", documentID: UUID(), fileKind: .markdown)
+        let storage = try #require(textView.textStorage)
+
+        let headingColor = storage.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor
+        let plainColor = storage.attribute(.foregroundColor, at: 9, effectiveRange: nil) as? NSColor
+
+        #expect(headingColor == EditorTheme.standard.attributes(for: .heading)[.foregroundColor] as? NSColor)
+        #expect(plainColor == NSColor.textColor)
+    }
+
     @Test func textChangedOutsideTheEditorIsLoaded() {
         let id = UUID()
         coordinator.update(text: "old", documentID: id, fileKind: .markdown)
