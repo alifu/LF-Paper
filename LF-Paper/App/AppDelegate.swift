@@ -8,10 +8,17 @@ import AppKit
 /// Asks about unsaved changes before the app quits.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        let unsaved = WorkspaceRegistry.shared.workspacesWithUnsavedChanges
+        Self.terminateReply(for: WorkspaceRegistry.shared.workspacesWithUnsavedChanges, ask: askToSave)
+    }
+
+    /// Quits right away when nothing is unsaved; otherwise acts on the answer from `ask`.
+    static func terminateReply(
+        for unsaved: [WorkspaceModel],
+        ask: ([WorkspaceModel]) -> WorkspaceModel.UnsavedChangesDecision
+    ) -> NSApplication.TerminateReply {
         guard !unsaved.isEmpty else { return .terminateNow }
 
-        switch askToSave(unsaved) {
+        switch ask(unsaved) {
         case .save:
             // Stops at the first failed save; that window shows the error and the app stays open.
             return unsaved.allSatisfy { $0.saveAll() } ? .terminateNow : .terminateCancel

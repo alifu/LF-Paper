@@ -34,25 +34,15 @@ final class ScratchpadRenderingTests {
     }
 
     private func render(_ view: some View, size: NSSize, appearance: NSAppearance.Name) throws -> NSBitmapImageRep {
-        let hostingView = NSHostingView(rootView: view.frame(width: size.width, height: size.height))
-        let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled], backing: .buffered, defer: false)
-        window.appearance = NSAppearance(named: appearance)
-        window.contentView = hostingView
-        hostingView.layoutSubtreeIfNeeded()
-        let bitmap = try #require(hostingView.bitmapImageRepForCachingDisplay(in: hostingView.bounds))
-        hostingView.cacheDisplay(in: hostingView.bounds, to: bitmap)
-        return bitmap
+        try OffscreenRenderer.render(view, size: size, appearance: appearance)
     }
 
-    /// Looser than the tab-name check elsewhere: the counts are small, secondary-gray text,
-    /// whose antialiased pixels rarely get darker than 0.4 on a light background.
     private func textPixels(in bitmap: NSBitmapImageRep, appearance: NSAppearance.Name) -> Int {
-        let isDark = appearance == .darkAqua
-        return PixelCounter.count(in: bitmap) { isDark ? $0 > 0.5 : $0 < 0.6 }
+        OffscreenRenderer.contentPixels(in: bitmap, appearance: appearance)
     }
 
     private func attach(_ bitmap: NSBitmapImageRep, named name: String) throws {
-        Attachment.record(try #require(bitmap.representation(using: .png, properties: [:])), named: name)
+        try OffscreenRenderer.attach(bitmap, named: name)
     }
 
     @Test(arguments: [NSAppearance.Name.darkAqua, .aqua])
@@ -60,11 +50,10 @@ final class ScratchpadRenderingTests {
         let model = try makeModel()
 
         let bitmap = try render(DocumentTabBar(model: model), size: Self.tabBarSize, appearance: appearance)
-        let blank = try render(Color(nsColor: .windowBackgroundColor), size: Self.tabBarSize, appearance: appearance)
         try attach(bitmap, named: "scratch-tab-only-\(appearance.rawValue).png")
 
         let text = textPixels(in: bitmap, appearance: appearance)
-        let blankText = textPixels(in: blank, appearance: appearance)
+        let blankText = try OffscreenRenderer.blankContentPixels(size: Self.tabBarSize, appearance: appearance)
         #expect(text > blankText + 15, "the Scratch tab should be visible (blank: \(blankText), tab bar: \(text))")
     }
 
@@ -94,11 +83,10 @@ final class ScratchpadRenderingTests {
         model.updateScratchpadText("Summarize this file\nin three bullet points.")
 
         let bitmap = try render(ScratchpadBar(model: model), size: Self.barSize, appearance: appearance)
-        let blank = try render(Color(nsColor: .windowBackgroundColor), size: Self.barSize, appearance: appearance)
         try attach(bitmap, named: "scratchpad-bar-\(appearance.rawValue).png")
 
         let text = textPixels(in: bitmap, appearance: appearance)
-        let blankText = textPixels(in: blank, appearance: appearance)
+        let blankText = try OffscreenRenderer.blankContentPixels(size: Self.barSize, appearance: appearance)
         #expect(text > blankText + 40, "counts and buttons should be visible (blank: \(blankText), bar: \(text))")
     }
 

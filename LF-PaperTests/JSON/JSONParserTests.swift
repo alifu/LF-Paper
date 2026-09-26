@@ -178,6 +178,22 @@ struct JSONParserTests {
         #expect(description == "Line 1, column 8: Expected a string key but found “}”.")
     }
 
+    @Test(arguments: [
+        ("[1, 2", "Expected"),
+        ("1.", "This number isn’t valid JSON."),
+        (#""\q""#, "Invalid escape sequence in a string."),
+        ("\"a\tb\"", "control characters must be escaped"),
+        (#""open"#, "This string is never closed."),
+        ("1 2", "Unexpected text after the JSON value."),
+        (String(repeating: "[", count: JSONParser.maximumDepth + 1), "Nesting is deeper than"),
+    ])
+    func everyErrorExplainsItself(text: String, explanation: String) throws {
+        let description = try #require(parseError(text)?.errorDescription)
+
+        #expect(description.hasPrefix("Line 1, column "))
+        #expect(description.contains(explanation), "\(description)")
+    }
+
     // MARK: Source ranges
 
     @Test func recordsTheSourceRangeOfEveryValue() throws {

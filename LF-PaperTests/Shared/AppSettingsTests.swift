@@ -37,6 +37,13 @@ struct AppSettingsTests {
         #expect(AppAppearance.dark.appearanceName == .darkAqua)
     }
 
+    @Test func settingsHaveTitlesForThePickers() {
+        #expect(AppAppearance.allCases.map(\.title) == ["System", "Light", "Dark"])
+        #expect(JSONIndentationSetting.allCases.map(\.title) == ["2 Spaces", "4 Spaces", "Tab"])
+        #expect(AppAppearance.allCases.map(\.id) == AppAppearance.allCases)
+        #expect(JSONIndentationSetting.allCases.map(\.id) == JSONIndentationSetting.allCases)
+    }
+
     @Test func settingsHaveStableStorageValues() {
         // Changing these would silently reset people's settings.
         #expect(AppAppearance.allCases.map(\.rawValue) == ["system", "light", "dark"])

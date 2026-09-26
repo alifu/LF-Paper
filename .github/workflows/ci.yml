@@ -1,0 +1,77 @@
+# Builds LF-Paper and runs the unit tests with a code-coverage gate on every push and pull request.
+# UI tests stay out of CI: they need a real, free screen, so they are run by hand (⌘U on LF-PaperUITests).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Same Xcode as local development; the app needs the macOS 26.5 SDK and runs on macOS 26.5+.
+  XCODE_APP: /Applications/Xcode_26.5.app
+  MINIMUM_COVERAGE: "80"
+  RESULT_BUNDLE: build/UnitTests.xcresult
+  PACKAGES_DIR: build/SourcePackages
+
+jobs:
+  unit-tests:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select --switch "$XCODE_APP"
+          xcodebuild -version
+          sw_vers
+
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PACKAGES_DIR }}
+          key: spm-${{ runner.os }}-${{ hashFiles('LF-Paper.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: Build and run unit tests
+        run: |
+          mkdir -p build
+          status=0
+          xcodebuild test \
+            -project LF-Paper.xcodeproj \
+            -scheme LF-Paper \
+            -destination 'platform=macOS' \
+            -only-testing:LF-PaperTests \
+            -enableCodeCoverage YES \
+            -clonedSourcePackagesDirPath "$PACKAGES_DIR" \
+            -resultBundlePath "$RESULT_BUNDLE" \
+            CODE_SIGN_IDENTITY=- \
+            > build/xcodebuild.log 2>&1 || status=$?
+          # The full log is uploaded below; show only failures, compiler problems and the summary here.
+          grep -E "^Test case .* failed|^Test run with|(error|warning): |^\*\* " build/xcodebuild.log \
+            | grep -v appintentsmetadataprocessor || true
+          exit "$status"
+
+      - name: Check code coverage
+        if: success() || failure()
+        run: python3 scripts/check-coverage.py "$RESULT_BUNDLE" --minimum "$MINIMUM_COVERAGE" --report build/coverage.md
+
+      - name: Upload test results and coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: |
+            build/coverage.md
+            build/xcodebuild.log
+            ${{ env.RESULT_BUNDLE }}
+          if-no-files-found: warn
+          retention-days: 14
