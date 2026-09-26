@@ -304,6 +304,17 @@ final class WorkspaceModelTests {
         #expect(Set(names(in: model)) == ["Untitled.md", "Untitled.json"])
     }
 
+    @Test func textOfTheOpenFileIncludesUnsavedEdits() throws {
+        try folder.makeFile("open.json", contents: "[1]")
+        try folder.makeFile("other.json", contents: "[2]")
+        let model = openedModel()
+        model.selection = try item(named: "open.json", in: model).url
+        model.updateDocumentText("[1, 1]")
+
+        #expect(model.text(of: try item(named: "open.json", in: model)) == "[1, 1]")
+        #expect(model.text(of: try item(named: "other.json", in: model)) == "[2]")
+    }
+
     @Test func createFolderInsideSubfolderExpandsIt() throws {
         try folder.makeFolder("docs")
         let model = openedModel()

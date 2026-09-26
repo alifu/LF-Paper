@@ -13,6 +13,7 @@ extension FocusedValues {
 /// File and View menu commands that act on the key window's workspace.
 struct WorkspaceCommands: Commands {
     @FocusedValue(\.workspace) private var workspace
+    @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
         CommandGroup(after: .newItem) {
@@ -45,6 +46,9 @@ struct WorkspaceCommands: Commands {
                 Button("Minify") { workspace?.minifyJSON() }
             }
             .disabled(workspace?.isJSONDocument != true)
+            Divider()
+            Button("Compare…") { openWindow(id: CompareView.windowID) }
+                .keyboardShortcut("c", modifiers: [.command, .option])
         }
     }
 

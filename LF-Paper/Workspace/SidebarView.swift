@@ -9,6 +9,8 @@ import SwiftUI
 /// The folder navigator: a file tree with a context menu for creating, renaming and trashing items.
 struct SidebarView: View {
     @Bindable var model: WorkspaceModel
+    @Environment(CompareModel.self) private var compareModel
+    @Environment(\.openWindow) private var openWindow
     @State private var renameTarget: FileItem?
     @State private var proposedName = ""
     @State private var trashTarget: FileItem?
@@ -77,6 +79,11 @@ struct SidebarView: View {
             }
             Button("New Folder") { model.createFolder(in: folder) }
         }
+        if let item, item.kind == .json {
+            Divider()
+            Button("Compare as Left") { sendToCompare(item, side: .left) }
+            Button("Compare as Right") { sendToCompare(item, side: .right) }
+        }
         if let item {
             Divider()
             Button("Rename…") { beginRename(item) }
@@ -86,6 +93,13 @@ struct SidebarView: View {
             Divider()
             Button("Move to Trash", role: .destructive) { trashTarget = item }
         }
+    }
+
+    /// Loads the file (with any unsaved edits) into one side of the Compare window and shows it.
+    private func sendToCompare(_ item: FileItem, side: JSONComparison.Side) {
+        guard let text = model.text(of: item) else { return }
+        compareModel.setSide(side, title: item.name, text: text)
+        openWindow(id: CompareView.windowID)
     }
 
     private func beginRename(_ item: FileItem) {

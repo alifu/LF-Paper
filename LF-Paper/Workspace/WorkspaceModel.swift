@@ -241,6 +241,19 @@ final class WorkspaceModel {
         document = document?.editing(text)
     }
 
+    /// A file's text, including unsaved edits when it's the open document. Presents read errors.
+    func text(of item: FileItem) -> String? {
+        if let document, Self.isSamePath(document.url, item.url) {
+            return document.text
+        }
+        do throws(AppError) {
+            return try fileService.read(item.url)
+        } catch {
+            present(error)
+            return nil
+        }
+    }
+
     /// Asks the editor to select `range` and scroll to it. Each call is a new request.
     func reveal(_ range: NSRange, focusesEditor: Bool) {
         revealRequest = RevealRequest(range: range, focusesEditor: focusesEditor)

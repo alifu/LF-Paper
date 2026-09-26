@@ -106,5 +106,6 @@ struct WorkspaceView: View {
 
 #Preview {
     WorkspaceView()
+        .environment(CompareModel())
         .frame(width: 1000, height: 640)
 }
