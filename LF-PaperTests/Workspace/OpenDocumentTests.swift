@@ -34,6 +34,25 @@ struct OpenDocumentTests {
         #expect(moved.isDirty)
     }
 
+    @Test func editsMovesAndSavesKeepTheSameIdentity() {
+        let changed = document.editing("changed").moving(to: URL(filePath: "/tmp/other.md")).markingSaved()
+
+        #expect(changed.id == document.id)
+    }
+
+    @Test func separatelyOpenedDocumentsHaveDifferentIdentities() {
+        let reopened = OpenDocument(url: document.url, text: document.text)
+
+        #expect(reopened.id != document.id)
+    }
+
+    @Test func revertingRestoresTheSavedText() {
+        let reverted = document.editing("changed").reverted()
+
+        #expect(reverted.text == "saved")
+        #expect(!reverted.isDirty)
+    }
+
     @Test func markingSavedClearsDirtyState() {
         let saved = document.editing("changed").markingSaved()
 

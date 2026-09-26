@@ -20,6 +20,11 @@ struct WorkspaceCommands: Commands {
                 .keyboardShortcut("o", modifiers: [.command, .shift])
                 .disabled(workspace == nil)
         }
+        CommandGroup(replacing: .saveItem) {
+            Button("Save") { _ = workspace?.save() }
+                .keyboardShortcut("s")
+                .disabled(workspace?.hasUnsavedChanges != true)
+        }
         CommandGroup(after: .sidebar) {
             Toggle("Show Hidden Files", isOn: showsHiddenFiles)
                 .keyboardShortcut(".", modifiers: [.command, .shift])

@@ -3,6 +3,8 @@
 //  LF-Paper
 //
 
+import AppKit
+import Combine
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -10,6 +12,7 @@ import UniformTypeIdentifiers
 struct WorkspaceView: View {
     @State private var model = WorkspaceModel()
     @State private var isPreviewVisible = true
+    @State private var window: NSWindow?
 
     var body: some View {
         NavigationSplitView {
@@ -17,7 +20,7 @@ struct WorkspaceView: View {
                 .navigationSplitViewColumnWidth(min: 180, ideal: 240, max: 400)
         } detail: {
             HSplitView {
-                ReadOnlyDocumentView(document: model.document)
+                EditorPane(model: model)
                     .frame(minWidth: 300, maxWidth: .infinity, maxHeight: .infinity)
                 if isPreviewVisible {
                     PreviewPlaceholder()
@@ -26,7 +29,7 @@ struct WorkspaceView: View {
             }
         }
         .navigationTitle(model.rootURL?.lastPathComponent ?? "LF-Paper")
-        .navigationSubtitle(model.document?.url.lastPathComponent ?? "")
+        .navigationSubtitle(subtitle)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Toggle(isOn: $isPreviewVisible) {
@@ -45,8 +48,36 @@ struct WorkspaceView: View {
         } message: { error in
             Text(error.recoverySuggestion ?? "")
         }
+        .alert(unsavedChangesMessage, isPresented: isAskingAboutUnsavedChanges) {
+            Button(UnsavedChangesPrompt.saveTitle) { model.resolvePendingAction(.save) }
+            Button(UnsavedChangesPrompt.discardTitle, role: .destructive) { model.resolvePendingAction(.discard) }
+            Button(UnsavedChangesPrompt.cancelTitle, role: .cancel) { model.resolvePendingAction(.cancel) }
+        } message: {
+            Text(UnsavedChangesPrompt.informativeText)
+        }
+        .background(WindowReader { window = $0 })
+        .onChange(of: model.hasUnsavedChanges) { _, hasUnsavedChanges in
+            window?.isDocumentEdited = hasUnsavedChanges // the dot in the close button
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { notification in
+            guard let window, (notification.object as? NSWindow) === window else { return }
+            // SwiftUI can't cancel a window close, so keep the user's work rather than lose it.
+            _ = model.save()
+        }
         .focusedSceneValue(\.workspace, model)
-        .task { model.restoreLastFolder() }
+        .task {
+            WorkspaceRegistry.shared.register(model)
+            model.restoreLastFolder()
+        }
+    }
+
+    private var subtitle: String {
+        guard let name = model.document?.url.lastPathComponent else { return "" }
+        return model.hasUnsavedChanges ? "\(name) — Edited" : name
+    }
+
+    private var unsavedChangesMessage: String {
+        UnsavedChangesPrompt.message(fileName: model.document?.url.lastPathComponent ?? "this file")
     }
 
     private var isShowingError: Binding<Bool> {
@@ -54,6 +85,16 @@ struct WorkspaceView: View {
             get: { model.presentedError != nil },
             set: { isPresented in
                 if !isPresented { model.presentedError = nil }
+            }
+        )
+    }
+
+    private var isAskingAboutUnsavedChanges: Binding<Bool> {
+        Binding(
+            get: { model.pendingAction != nil },
+            set: { isPresented in
+                // Dismissed without choosing (e.g. Escape) counts as Cancel.
+                if !isPresented { model.resolvePendingAction(.cancel) }
             }
         )
     }

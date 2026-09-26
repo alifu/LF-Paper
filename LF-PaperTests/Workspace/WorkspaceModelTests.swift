@@ -159,6 +159,116 @@ final class WorkspaceModelTests {
         #expect(model.document?.isDirty == false)
     }
 
+    // MARK: Unsaved changes
+
+    /// A workspace with "a.md" ("A") open and edited to "A edited", plus an untouched "b.md" ("B").
+    private func modelWithUnsavedEdit() throws -> (model: WorkspaceModel, b: FileItem) {
+        try folder.makeFile("a.md", contents: "A")
+        try folder.makeFile("b.md", contents: "B")
+        let model = openedModel()
+        model.selection = try item(named: "a.md", in: model).url
+        model.updateDocumentText("A edited")
+        return (model, try item(named: "b.md", in: model))
+    }
+
+    @Test func switchingFilesWithUnsavedChangesAsksFirst() throws {
+        let (model, b) = try modelWithUnsavedEdit()
+
+        model.selection = b.url
+
+        #expect(model.pendingAction == .openFile(b.url))
+        #expect(model.document?.url.lastPathComponent == "a.md")
+        #expect(model.hasUnsavedChanges)
+    }
+
+    @Test func savingBeforeSwitchingWritesTheEditsThenOpensTheNewFile() throws {
+        let (model, b) = try modelWithUnsavedEdit()
+        model.selection = b.url
+
+        model.resolvePendingAction(.save)
+
+        #expect(try folder.contents(of: "a.md") == "A edited")
+        #expect(model.document?.text == "B")
+        #expect(model.pendingAction == nil)
+    }
+
+    @Test func discardingBeforeSwitchingOpensTheNewFileWithoutWriting() throws {
+        let (model, b) = try modelWithUnsavedEdit()
+        model.selection = b.url
+
+        model.resolvePendingAction(.discard)
+
+        #expect(try folder.contents(of: "a.md") == "A")
+        #expect(model.document?.text == "B")
+    }
+
+    @Test func cancellingSwitchKeepsTheEditsAndReselectsTheOpenFile() throws {
+        let (model, b) = try modelWithUnsavedEdit()
+        model.selection = b.url
+
+        model.resolvePendingAction(.cancel)
+
+        #expect(model.document?.text == "A edited")
+        #expect(model.selection?.lastPathComponent == "a.md")
+        #expect(model.pendingAction == nil)
+    }
+
+    @Test func openingAnotherFolderWithUnsavedChangesAsksFirst() throws {
+        let (model, _) = try modelWithUnsavedEdit()
+        let other = try TemporaryDirectory()
+
+        model.openFolder(other.url)
+        #expect(model.pendingAction == .openFolder(other.url))
+        #expect(model.rootURL == folder.url)
+
+        model.resolvePendingAction(.discard)
+        #expect(model.rootURL == other.url)
+        #expect(model.document == nil)
+    }
+
+    @Test func discardUnsavedChangesRevertsToTheSavedText() throws {
+        let (model, _) = try modelWithUnsavedEdit()
+
+        model.discardUnsavedChanges()
+
+        #expect(model.document?.text == "A")
+        #expect(!model.hasUnsavedChanges)
+    }
+
+    @Test func fileDeletedOnDiskKeepsUnsavedEditsUntilSavedAgain() throws {
+        let (model, _) = try modelWithUnsavedEdit()
+        try FileManager.default.removeItem(at: folder.url.appending(path: "a.md"))
+
+        model.reloadAll()
+        #expect(model.document?.text == "A edited")
+        #expect(model.isDocumentMissingOnDisk)
+
+        #expect(model.save())
+        #expect(try folder.contents(of: "a.md") == "A edited")
+        #expect(!model.isDocumentMissingOnDisk)
+    }
+
+    @Test func cleanDocumentReloadsWhenChangedOnDisk() throws {
+        try folder.makeFile("a.md", contents: "A")
+        let model = openedModel()
+        model.selection = try item(named: "a.md", in: model).url
+        try folder.makeFile("a.md", contents: "A changed elsewhere")
+
+        model.reloadAll()
+
+        #expect(model.document?.text == "A changed elsewhere")
+        #expect(model.document?.isDirty == false)
+    }
+
+    @Test func editedDocumentKeepsItsEditsWhenChangedOnDisk() throws {
+        let (model, _) = try modelWithUnsavedEdit()
+        try folder.makeFile("a.md", contents: "A changed elsewhere")
+
+        model.reloadAll()
+
+        #expect(model.document?.text == "A edited")
+    }
+
     // MARK: File operations
 
     @Test func createFileAddsUniqueUntitledFilesAndSelectsThem() throws {

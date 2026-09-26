@@ -9,6 +9,8 @@ import SwiftUI
 
 @main
 struct LF_PaperApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
     var body: some Scene {
         WindowGroup {
             WorkspaceView()
@@ -16,6 +18,7 @@ struct LF_PaperApp: App {
         .defaultSize(width: 1100, height: 700)
         .commands {
             SidebarCommands()
+            TextEditingCommands()
             WorkspaceCommands()
         }
     }

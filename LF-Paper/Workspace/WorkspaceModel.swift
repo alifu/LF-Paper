@@ -11,6 +11,18 @@ import os
 /// the selection and the open document.
 @Observable
 final class WorkspaceModel {
+    /// Something that would replace the open document and so waits for a decision about unsaved changes.
+    enum PendingAction: Equatable {
+        case openFile(URL)
+        case openFolder(URL)
+    }
+
+    enum UnsavedChangesDecision {
+        case save
+        case discard
+        case cancel
+    }
+
     private enum NewItem {
         case file
         case folder
@@ -26,9 +38,12 @@ final class WorkspaceModel {
     private(set) var childrenByFolder: [URL: [FileItem]] = [:]
     private(set) var expandedFolders: Set<URL> = []
     private(set) var document: OpenDocument?
+    /// The open file was deleted on disk while it had unsaved changes. Saving recreates it.
+    private(set) var isDocumentMissingOnDisk = false
+    private(set) var pendingAction: PendingAction?
     var selection: URL? {
         didSet {
-            if selection != oldValue { openSelectedFile() }
+            if selection != oldValue { selectionDidChange() }
         }
     }
     var showsHiddenFiles = false {
@@ -55,25 +70,18 @@ final class WorkspaceModel {
         self.watchesFileSystem = watchesFileSystem
     }
 
+    var hasUnsavedChanges: Bool {
+        document?.isDirty == true || isDocumentMissingOnDisk
+    }
+
     // MARK: Opening
 
     func openFolder(_ url: URL) {
-        let access = SecurityScopedAccess(url: url)
-        let items: [FileItem]
-        do throws(AppError) {
-            items = try fileService.contents(of: url, includeHidden: showsHiddenFiles)
-        } catch {
-            present(error)
+        guard !hasUnsavedChanges else {
+            pendingAction = .openFolder(url)
             return
         }
-        rootAccess = access
-        rootURL = url
-        childrenByFolder = [url: items]
-        expandedFolders = []
-        selection = nil
-        document = nil
-        remember(url)
-        startWatching(url)
+        performOpenFolder(url)
     }
 
     func handleFolderPickerResult(_ result: Result<URL, any Error>) {
@@ -88,9 +96,34 @@ final class WorkspaceModel {
     /// Reopens the folder from the last launch, if it still exists.
     func restoreLastFolder() {
         guard rootURL == nil, let url = bookmarkStore.restore() else { return }
-        openFolder(url)
+        performOpenFolder(url)
         if rootURL == nil {
             bookmarkStore.clear()
+        }
+    }
+
+    // MARK: Unsaved changes
+
+    func resolvePendingAction(_ decision: UnsavedChangesDecision) {
+        guard let action = pendingAction else { return }
+        pendingAction = nil
+        switch decision {
+        case .save:
+            if save() { perform(action) } else { cancel(action) }
+        case .discard:
+            discardUnsavedChanges()
+            perform(action)
+        case .cancel:
+            cancel(action)
+        }
+    }
+
+    func discardUnsavedChanges() {
+        if isDocumentMissingOnDisk {
+            document = nil
+            isDocumentMissingOnDisk = false
+        } else {
+            document = document?.reverted()
         }
     }
 
@@ -115,7 +148,8 @@ final class WorkspaceModel {
         expandedFolders.insert(folder)
     }
 
-    /// Re-reads the root and every expanded folder, dropping anything that disappeared.
+    /// Re-reads the root and every expanded folder, dropping anything that disappeared,
+    /// and brings the open document in line with the disk.
     func reloadAll() {
         guard let rootURL else { return }
         let folders = [rootURL] + expandedFolders.filter { $0 != rootURL }
@@ -131,7 +165,10 @@ final class WorkspaceModel {
         }
         childrenByFolder = reloaded
         expandedFolders = expandedFolders.filter { reloaded[$0] != nil }
-        dropMissingSelectionAndDocument()
+        if let selection, !fileService.exists(selection) {
+            self.selection = nil
+        }
+        syncDocumentWithDisk()
     }
 
     /// Where "New File"/"New Folder" go: the folder itself, or the folder containing the file.
@@ -182,17 +219,104 @@ final class WorkspaceModel {
         document = document?.editing(text)
     }
 
-    func save() {
-        guard let document, document.isDirty else { return }
+    /// Writes unsaved changes. Returns `false` (and presents the error) if the write failed.
+    @discardableResult
+    func save() -> Bool {
+        guard let document, hasUnsavedChanges else { return true }
         do throws(AppError) {
             try fileService.write(document.text, to: document.url)
             self.document = document.markingSaved()
+            isDocumentMissingOnDisk = false
+            return true
+        } catch {
+            present(error)
+            return false
+        }
+    }
+
+    // MARK: Private
+
+    private func performOpenFolder(_ url: URL) {
+        let access = SecurityScopedAccess(url: url)
+        let items: [FileItem]
+        do throws(AppError) {
+            items = try fileService.contents(of: url, includeHidden: showsHiddenFiles)
+        } catch {
+            present(error)
+            return
+        }
+        rootAccess = access
+        rootURL = url
+        childrenByFolder = [url: items]
+        expandedFolders = []
+        document = nil
+        isDocumentMissingOnDisk = false
+        selection = nil
+        remember(url)
+        startWatching(url)
+    }
+
+    private func perform(_ action: PendingAction) {
+        switch action {
+        case .openFile(let url): openFile(at: url)
+        case .openFolder(let url): performOpenFolder(url)
+        }
+    }
+
+    private func cancel(_ action: PendingAction) {
+        guard case .openFile = action else { return }
+        // Put the highlight back on the file that's still open.
+        selection = document.map { item(at: $0.url)?.url ?? $0.url }
+    }
+
+    private func selectionDidChange() {
+        guard let selection,
+              let item = item(at: selection),
+              !item.isFolder,
+              !isOpen(item.url)
+        else { return }
+        guard !hasUnsavedChanges else {
+            pendingAction = .openFile(item.url)
+            return
+        }
+        openFile(at: item.url)
+    }
+
+    private func openFile(at url: URL) {
+        do throws(AppError) {
+            document = OpenDocument(url: url, text: try fileService.read(url))
+            isDocumentMissingOnDisk = false
         } catch {
             present(error)
         }
     }
 
-    // MARK: Private
+    private func isOpen(_ url: URL) -> Bool {
+        document.map { Self.isSamePath($0.url, url) } ?? false
+    }
+
+    /// Unedited documents follow the disk; edited ones are never overwritten or dropped.
+    private func syncDocumentWithDisk() {
+        guard let document else { return }
+        guard fileService.exists(document.url) else {
+            if document.isDirty {
+                isDocumentMissingOnDisk = true
+            } else {
+                self.document = nil
+            }
+            return
+        }
+        isDocumentMissingOnDisk = false
+        guard !document.isDirty else { return }
+        do throws(AppError) {
+            let diskText = try fileService.read(document.url)
+            if diskText != document.text {
+                self.document = OpenDocument(url: document.url, text: diskText)
+            }
+        } catch {
+            present(error)
+        }
+    }
 
     private func create(_ newItem: NewItem, in folder: URL) {
         guard childrenByFolder[folder] != nil || load(folder) else { return }
@@ -225,29 +349,6 @@ final class WorkspaceModel {
         } catch {
             present(error)
             return false
-        }
-    }
-
-    private func openSelectedFile() {
-        guard let selection,
-              let item = item(at: selection),
-              !item.isFolder,
-              !(document.map { Self.isSamePath($0.url, selection) } ?? false)
-        else { return }
-        do throws(AppError) {
-            document = OpenDocument(url: item.url, text: try fileService.read(item.url))
-        } catch {
-            present(error)
-        }
-    }
-
-    private func dropMissingSelectionAndDocument() {
-        if let selection, !fileService.exists(selection) {
-            self.selection = nil
-        }
-        // TODO(Phase 2): ask before discarding unsaved changes to a file deleted on disk.
-        if let document, !fileService.exists(document.url) {
-            self.document = nil
         }
     }
 
