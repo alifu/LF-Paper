@@ -57,6 +57,11 @@ struct AppSettingsTests {
         #expect(UnsavedChangesOnClose.allCases.map(\.title) == ["Ask", "Save Automatically"])
     }
 
+    @Test func linesDoNotWrapByDefault() {
+        #expect(!AppSettings.defaultWrapsLines)
+        #expect(AppSettings.Key.wrapsLines == "settings.wrapsLines") // changing it would reset people's choice
+    }
+
     @Test func settingsHaveStableStorageValues() {
         // Changing these would silently reset people's settings.
         #expect(AppAppearance.allCases.map(\.rawValue) == ["system", "light", "dark"])

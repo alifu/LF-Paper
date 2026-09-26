@@ -11,11 +11,13 @@ import Testing
 /// Renders the Settings window offscreen, in dark and light mode. It only reads the settings.
 @MainActor
 struct SettingsViewRenderingTests {
-    private static let size = NSSize(width: 420, height: 290)
+    private static let size = NSSize(width: 460, height: 340)
 
     @Test(arguments: [NSAppearance.Name.darkAqua, .aqua])
     func showsEverySetting(appearance: NSAppearance.Name) throws {
-        let bitmap = try OffscreenRenderer.render(SettingsView(), size: Self.size, appearance: appearance)
+        // The Settings window draws the background in the app.
+        let view = SettingsView().background(Color(nsColor: .windowBackgroundColor))
+        let bitmap = try OffscreenRenderer.render(view, size: Self.size, appearance: appearance)
         try OffscreenRenderer.attach(bitmap, named: "settings-\(appearance.rawValue).png")
 
         let content = OffscreenRenderer.contentPixels(in: bitmap, appearance: appearance)

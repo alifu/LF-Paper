@@ -67,6 +67,9 @@ nonisolated struct DiffCell: Equatable, Sendable {
     let lineNumber: Int
     let text: String
     let kind: TextDiffLine.Kind
+    /// For a changed line paired with the line it replaced: the parts that differ (UTF-16).
+    /// `nil` when the whole line counts as changed (or it's unchanged).
+    var changedRanges: [NSRange]?
 }
 
 /// A row of the side-by-side view: the old line on the left, the new one on the right.
@@ -88,7 +91,8 @@ nonisolated struct SideBySideRow: Identifiable, Equatable, Sendable {
     }
 }
 
-private extension DiffCell {
+extension DiffCell {
+    /// What VoiceOver reads for one side's line: "Removed line 2: …".
     nonisolated var accessibilityDescription: String {
         let change = switch kind {
         case .removed: "Removed line"
@@ -108,8 +112,12 @@ nonisolated enum SideBySideRows {
 
         func flushChanges() {
             for index in 0..<max(removed.count, added.count) {
-                let left = index < removed.count ? cell(removed[index], number: removed[index].oldLineNumber) : nil
-                let right = index < added.count ? cell(added[index], number: added[index].newLineNumber) : nil
+                var left = index < removed.count ? cell(removed[index], number: removed[index].oldLineNumber) : nil
+                var right = index < added.count ? cell(added[index], number: added[index].newLineNumber) : nil
+                if let old = left?.text, let new = right?.text, let changes = WordDiff.changes(from: old, to: new) {
+                    left?.changedRanges = changes.old
+                    right?.changedRanges = changes.new
+                }
                 rows.append(SideBySideRow(id: rows.count, left: left, right: right))
             }
             removed = []
@@ -133,6 +141,17 @@ nonisolated enum SideBySideRows {
         }
         flushChanges()
         return rows
+    }
+
+    /// All rows of a block of changes (by its index in `changeStarts`), or `nil`.
+    static func rows(ofChange change: Int?, in rows: [SideBySideRow], changeStarts: [Int]) -> Range<Int>? {
+        guard let change, changeStarts.indices.contains(change) else { return nil }
+        let start = changeStarts[change]
+        var end = start
+        while end < rows.count, rows[end].isChange {
+            end += 1
+        }
+        return start..<end
     }
 
     /// The first row of every run of changed rows.

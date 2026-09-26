@@ -56,7 +56,6 @@ brew uninstall --zap --cask lf-paper
 ## Development
 
 Open `LF-Paper.xcodeproj` in Xcode 26.5 and run the `LF-Paper` scheme.
-The plan, conventions and progress are in [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
 
 Unit tests (the UI tests take over the mouse and keyboard, so run those by hand):
 

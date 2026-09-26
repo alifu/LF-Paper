@@ -18,6 +18,7 @@ struct EditorPane: View {
 
     let model: WorkspaceModel
     @AppStorage(AppSettings.Key.editorFontSize) private var fontSize = AppSettings.defaultFontSize
+    @AppStorage(AppSettings.Key.wrapsLines) private var wrapsLines = AppSettings.defaultWrapsLines
 
     var body: some View {
         if let content {
@@ -34,6 +35,7 @@ struct EditorPane: View {
                     fileKind: content.fileKind,
                     fontSize: CGFloat(AppSettings.clampedFontSize(fontSize)),
                     openDocumentIDs: model.editorDocumentIDs,
+                    wrapsLines: model.wrapsLines(preference: wrapsLines),
                     revealRequest: model.revealRequest,
                     onTextChange: content.onTextChange,
                     onSelectionChange: { model.noteSelection($1, in: $0) }
@@ -56,7 +58,8 @@ struct EditorPane: View {
             Content(
                 text: document.text,
                 id: document.id,
-                fileKind: FileKind(fileExtension: document.url.pathExtension)
+                // Highlighting a very long line on every keystroke is too slow.
+                fileKind: model.editsAsPlainText ? nil : FileKind(fileExtension: document.url.pathExtension)
             ) { model.updateDocumentText($0) }
         }
     }
@@ -68,10 +71,36 @@ struct EditorPane: View {
                 _ = model.save()
             }
         }
+        if model.offersFormatting, let document = model.document {
+            FormatOfferBanner(fileName: document.url.lastPathComponent, model: model)
+        }
         if model.isJSONDocument {
             JSONEditorBar(model: model)
             Divider()
         }
+    }
+}
+
+/// For minified JSON: formatting makes it readable and fast to edit with highlighting again.
+private struct FormatOfferBanner: View {
+    let fileName: String
+    let model: WorkspaceModel
+    @AppStorage(AppSettings.Key.jsonIndentation) private var indentation = JSONIndentationSetting.twoSpaces
+
+    var body: some View {
+        HStack {
+            Label("“\(fileName)” is on one very long line, so it’s wrapped and shown without highlighting.", systemImage: "text.alignleft")
+                .lineLimit(2)
+            Spacer()
+            Button("Not Now") { model.declineFormatting() }
+            Button("Format") { model.formatJSON(indentation: indentation.indentation) }
+        }
+        .controlSize(.small)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.blue.opacity(0.12))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("format-offer")
     }
 }
 

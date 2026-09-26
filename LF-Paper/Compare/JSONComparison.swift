@@ -23,6 +23,15 @@ nonisolated enum JSONComparison {
         let differences: [JSONDifference]
         let rows: [SideBySideRow]
         let changeStarts: [Int]
+        /// For sizing each side of the side-by-side view; measured once, off the main thread.
+        let longestLines: DiffLayout.LongestLines
+
+        init(differences: [JSONDifference], rows: [SideBySideRow], changeStarts: [Int]) {
+            self.differences = differences
+            self.rows = rows
+            self.changeStarts = changeStarts
+            longestLines = DiffLayout.longestLines(in: rows)
+        }
     }
 
     nonisolated enum Outcome: Equatable, Sendable {

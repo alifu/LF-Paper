@@ -3,7 +3,7 @@
 //  LF-PaperTests
 //
 
-import Foundation
+import AppKit
 import Testing
 @testable import LF_Paper
 
@@ -81,6 +81,36 @@ struct LargeFilePerformanceTests {
         }
         #expect(!tokens.isEmpty)
         Self.report("highlight-1MB-single-line", duration, budget: .seconds(1))
+    }
+
+    /// Typing into a 1 MB line in the real editor, with JSON highlighting and as plain text
+    /// (what files with very long lines get). Average of 10 keystrokes each.
+    @Test @MainActor func typingInAMinifiedLineAsPlainText() {
+        let oneLine = String(Self.largeJSON.prefix(1_000_000))
+        func averageKeystroke(fileKind: FileKind?, wrapsLines: Bool = true) -> Duration {
+            let views = CodeTextView.makeEditorViews()
+            views.scrollView.frame = NSRect(x: 0, y: 0, width: 800, height: 600)
+            let coordinator = CodeTextView.Coordinator { _ in }
+            coordinator.attach(textView: views.textView, ruler: views.ruler)
+            coordinator.update(text: oneLine, documentID: UUID(), fileKind: fileKind, wrapsLines: wrapsLines)
+            let (_, total) = Self.measure {
+                for _ in 0..<10 {
+                    views.textView.insertText("x", replacementRange: NSRange(location: 500_000, length: 0))
+                }
+            }
+            return total / 10
+        }
+
+        let highlighted = averageKeystroke(fileKind: .json)
+        let plain = averageKeystroke(fileKind: nil)
+        let plainScrolling = averageKeystroke(fileKind: nil, wrapsLines: false)
+
+        // Seconds per keystroke: the reason files with such lines are edited as plain text (LongLines).
+        Self.report("keystroke-1MB-line-highlighted", highlighted, budget: .seconds(30))
+        Self.report("keystroke-1MB-line-plain", plain, budget: .milliseconds(50))
+        // Laying out one huge unwrapped line is what makes this slower, so such files always wrap.
+        Self.report("keystroke-1MB-line-plain-unwrapped", plainScrolling, budget: .seconds(3))
+        #expect(plain < highlighted)
     }
 
     @Test func renderingLargeMarkdown() {

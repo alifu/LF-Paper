@@ -16,6 +16,8 @@ struct CodeTextView: NSViewRepresentable {
     var fontSize: CGFloat = EditorTheme.defaultFontSize
     /// Documents still open in tabs; the undo histories of all others are dropped.
     var openDocumentIDs: Set<UUID>? = nil
+    /// Wrap long lines at the editor's width, or let them run on and scroll sideways.
+    var wrapsLines = true
     /// Selects and scrolls to a range once per request (e.g. a JSON error or a tree value).
     var revealRequest: RevealRequest?
     let onTextChange: @MainActor (String) -> Void
@@ -46,7 +48,8 @@ struct CodeTextView: NSViewRepresentable {
             fileKind: fileKind,
             revealRequest: revealRequest,
             fontSize: fontSize,
-            openDocumentIDs: openDocumentIDs
+            openDocumentIDs: openDocumentIDs,
+            wrapsLines: wrapsLines
         )
     }
 
@@ -122,6 +125,8 @@ extension CodeTextView {
         private var isReplacingText = false
         private var lastRevealID: UUID?
         private var theme = EditorTheme.standard
+        /// `nil` until the first update, so the first one always applies the setting.
+        private var wrapsLines: Bool?
 
         init(onTextChange: @escaping @MainActor (String) -> Void) {
             self.onTextChange = onTextChange
@@ -143,7 +148,8 @@ extension CodeTextView {
             fileKind: FileKind?,
             revealRequest: RevealRequest? = nil,
             fontSize: CGFloat = EditorTheme.defaultFontSize,
-            openDocumentIDs: Set<UUID>? = nil
+            openDocumentIDs: Set<UUID>? = nil,
+            wrapsLines: Bool = true
         ) {
             guard let textView else { return }
             let isNewDocument = documentID != self.documentID
@@ -166,6 +172,10 @@ extension CodeTextView {
                 textView.typingAttributes = theme.baseAttributes
                 ruler?.matchEditorFontSize(fontSize)
             }
+            if wrapsLines != self.wrapsLines {
+                self.wrapsLines = wrapsLines
+                applyLineWrapping(wrapsLines, to: textView)
+            }
 
             if isNewDocument {
                 show(text, restoring: savedStates.removeValue(forKey: documentID), in: textView)
@@ -176,6 +186,26 @@ extension CodeTextView {
                 applyStyle(to: NSRange(location: 0, length: storage.length), in: storage)
             }
             reveal(revealRequest, in: textView)
+        }
+
+        /// Wrapping: the text container follows the view's width. Not wrapping: the container is
+        /// unlimited, the view grows with the longest line and the scroll view scrolls sideways.
+        private func applyLineWrapping(_ wraps: Bool, to textView: NSTextView) {
+            guard let container = textView.textContainer else { return }
+            let scrollView = textView.enclosingScrollView
+            let visibleWidth = scrollView?.contentSize.width ?? textView.frame.width
+            scrollView?.hasHorizontalScroller = !wraps
+            textView.isHorizontallyResizable = !wraps
+            textView.autoresizingMask = wraps ? [.width] : [.width, .height]
+            container.widthTracksTextView = wraps
+            if wraps {
+                // Back to the visible width; the container then follows the view again.
+                textView.setFrameSize(NSSize(width: visibleWidth, height: textView.frame.height))
+                container.containerSize = NSSize(width: visibleWidth, height: .greatestFiniteMagnitude)
+            } else {
+                container.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude)
+            }
+            textView.sizeToFit()
         }
 
         private func show(_ text: String, restoring state: DocumentState?, in textView: NSTextView) {
@@ -243,9 +273,11 @@ extension CodeTextView {
         fileprivate func applyStyle(to editedRange: NSRange, in storage: NSTextStorage) {
             let text = storage.mutableString
             let shouldHighlight = highlighter != nil && storage.length <= Self.highlightingLimit
+            // Without highlighting nothing depends on the surrounding text, so only the edit is restyled
+            // (restyling the whole line made typing in a 1 MB line slow).
             let range = shouldHighlight
                 ? highlighter?.invalidationRange(for: editedRange, in: text) ?? editedRange
-                : TextRanges.lines(touching: editedRange, in: text)
+                : TextRanges.clamped(editedRange, in: text)
             storage.setAttributes(theme.baseAttributes, range: range)
 
             guard shouldHighlight, let highlighter else { return }

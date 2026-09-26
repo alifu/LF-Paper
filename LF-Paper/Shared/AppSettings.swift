@@ -13,6 +13,7 @@ nonisolated enum AppSettings {
         static let jsonIndentation = "settings.jsonIndentation"
         static let autosaves = "settings.autosaves"
         static let unsavedChangesOnClose = "settings.unsavedChangesOnClose"
+        static let wrapsLines = "settings.wrapsLines"
     }
 
     enum Zoom {
@@ -22,6 +23,8 @@ nonisolated enum AppSettings {
     }
 
     static let defaultFontSize = 13.0
+    /// Long lines run past the edge and scroll sideways, as in code editors. The scratchpad always wraps.
+    static let defaultWrapsLines = false
     static let fontSizeRange: ClosedRange<Double> = 9...32
     static let fontSizeStep = 1.0
     /// How long after typing stops an autosave happens.

@@ -46,9 +46,14 @@ nonisolated extension SyntaxHighlighter {
 nonisolated enum TextRanges {
     /// The whole lines that `range` touches, with `range` clamped to the text first.
     static func lines(touching range: NSRange, in text: NSString) -> NSRange {
+        text.paragraphRange(for: clamped(range, in: text))
+    }
+
+    /// `range` limited to the text.
+    static func clamped(_ range: NSRange, in text: NSString) -> NSRange {
         let location = min(max(range.location, 0), text.length)
         let length = min(max(range.length, 0), text.length - location)
-        return text.paragraphRange(for: NSRange(location: location, length: length))
+        return NSRange(location: location, length: length)
     }
 }
 

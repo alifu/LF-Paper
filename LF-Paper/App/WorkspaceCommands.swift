@@ -13,9 +13,12 @@ extension FocusedValues {
 
 /// File, View and JSON menu commands that act on the key window's workspace.
 struct WorkspaceCommands: Commands {
+    /// The Compare window's model, for Compare with Saved Version.
+    let compare: CompareModel
     @FocusedValue(\.workspace) private var workspace
     @Environment(\.openWindow) private var openWindow
     @AppStorage(AppSettings.Key.editorFontSize) private var fontSize = AppSettings.defaultFontSize
+    @AppStorage(AppSettings.Key.wrapsLines) private var wrapsLines = AppSettings.defaultWrapsLines
     @AppStorage(AppSettings.Key.jsonIndentation) private var indentation = JSONIndentationSetting.twoSpaces
     private let recentFolders = RecentFolders.shared
 
@@ -48,6 +51,11 @@ struct WorkspaceCommands: Commands {
             Button("Save All") { workspace?.saveAll() }
                 .keyboardShortcut("s", modifiers: [.command, .option])
                 .disabled(workspace?.hasUnsavedChanges != true)
+            Divider()
+            Button("Compare with Saved Version") { show(workspace?.comparisonWithSavedVersion()) }
+                .disabled(workspace?.activeTabHasUnsavedChanges != true)
+            Button("Compare with Last Commit") { compareWithLastCommit() }
+                .disabled(workspace?.document == nil || workspace?.isInGitRepository != true)
         }
         CommandGroup(after: .sidebar) {
             viewItems
@@ -103,6 +111,24 @@ struct WorkspaceCommands: Commands {
         }
     }
 
+    private func compareWithLastCommit() {
+        guard let workspace else { return }
+        Task {
+            do throws(AppError) {
+                show(try await workspace.comparisonWithLastCommit())
+            } catch {
+                workspace.presentedError = error
+            }
+        }
+    }
+
+    /// Opens the Compare window with the two versions.
+    private func show(_ request: ComparisonRequest?) {
+        guard let request else { return }
+        compare.show(request)
+        openWindow(id: CompareView.windowID)
+    }
+
     // MARK: View
 
     @ViewBuilder
@@ -126,6 +152,9 @@ struct WorkspaceCommands: Commands {
         Button("Show Previous Tab") { workspace?.activatePreviousTab() }
             .keyboardShortcut("[", modifiers: [.command, .shift])
             .disabled((workspace?.tabs.count ?? 0) < 2)
+        Divider()
+        Toggle("Wrap Lines", isOn: $wrapsLines)
+            .keyboardShortcut("l", modifiers: [.command, .option])
         Divider()
         Button("Bigger") { fontSize = AppSettings.fontSize(fontSize, zoomed: .bigger) }
             .keyboardShortcut("+")

@@ -118,6 +118,47 @@ final class CodeTextViewCoordinatorTests {
         #expect(coordinator.undoManager(for: textView) !== firstUndo)
     }
 
+    // MARK: Line wrapping
+
+    private static let longLine = String(repeating: "wide ", count: 400)
+
+    private func usedWidth() throws -> CGFloat {
+        let layoutManager = try #require(textView.layoutManager)
+        let textContainer = try #require(textView.textContainer)
+        layoutManager.ensureLayout(for: textContainer)
+        return layoutManager.usedRect(for: textContainer).width
+    }
+
+    @Test func withoutWrappingLongLinesScrollSideways() throws {
+        coordinator.update(text: Self.longLine, documentID: UUID(), fileKind: nil, wrapsLines: false)
+
+        #expect(scrollView.hasHorizontalScroller)
+        #expect(textView.isHorizontallyResizable)
+        #expect(textView.textContainer?.widthTracksTextView == false)
+        #expect(try usedWidth() > Self.editorSize.width)
+        #expect(textView.frame.width > Self.editorSize.width) // wide enough to scroll to the end of the line
+    }
+
+    @Test func wrappingKeepsLinesWithinTheEditor() throws {
+        coordinator.update(text: Self.longLine, documentID: UUID(), fileKind: nil, wrapsLines: true)
+
+        #expect(!scrollView.hasHorizontalScroller)
+        #expect(textView.textContainer?.widthTracksTextView == true)
+        #expect(try usedWidth() <= Self.editorSize.width)
+    }
+
+    @Test func switchingWrappingBackAndForthReflowsTheText() throws {
+        let id = UUID()
+        coordinator.update(text: Self.longLine, documentID: id, fileKind: nil, wrapsLines: false)
+        coordinator.update(text: Self.longLine, documentID: id, fileKind: nil, wrapsLines: true)
+
+        #expect(try usedWidth() <= Self.editorSize.width)
+        #expect(textView.frame.width <= Self.editorSize.width)
+
+        coordinator.update(text: Self.longLine, documentID: id, fileKind: nil, wrapsLines: false)
+        #expect(try usedWidth() > Self.editorSize.width)
+    }
+
     @Test func reportsSelectionChangesWithTheirDocument() {
         var reported: [(UUID, NSRange)] = []
         coordinator.onSelectionChange = { reported.append(($0, $1)) }

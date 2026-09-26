@@ -172,6 +172,20 @@ final class LF_PaperUITests: XCTestCase {
     }
 
     @MainActor
+    func testCompareWithSavedVersionShowsTheEdit() throws {
+        openFile("README.md")
+        let editor = waitFor("editor")
+        editor.click()
+        editor.typeKey(.downArrow, modifierFlags: .command)
+        editor.typeText("An unsaved line.")
+
+        chooseMenuItem("Compare with Saved Version", inMenu: "File")
+
+        let counter = waitFor("change-counter")
+        waitUntil("the edit shows as one change") { (counter.value as? String ?? counter.label) == "1 change" }
+    }
+
+    @MainActor
     func testCompareTwoFiles() throws {
         waitFor("file-data.json").rightClick()
         app.menuItems["Compare as Left"].click()

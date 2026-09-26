@@ -7,7 +7,8 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// The Compare JSON window: two sources, options, and the differences side by side or as a list.
+/// The Compare window: two sources, options, and the differences side by side or as a list.
+/// Plain text (such as a Markdown file against its saved version) has only the side-by-side view.
 struct CompareView: View {
     static let windowID = "compare-json"
 
@@ -86,17 +87,24 @@ struct CompareView: View {
 
     private var optionsBar: some View {
         HStack(spacing: 12) {
-            Toggle("Ignore key order", isOn: $model.ignoresKeyOrder)
-            TextField("Match array items by key (e.g. id)", text: $model.arrayMatchKey)
-                .textFieldStyle(.roundedBorder)
-                .frame(maxWidth: 240)
-            Spacer()
-            Picker("View", selection: $mode) {
-                ForEach(Mode.allCases) { Text($0.rawValue).tag($0) }
+            if model.contentKind == .json {
+                Toggle("Ignore key order", isOn: $model.ignoresKeyOrder)
+                TextField("Match array items by key (e.g. id)", text: $model.arrayMatchKey)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 240)
+            } else {
+                Text("Comparing text line by line")
+                    .foregroundStyle(.secondary)
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
+            Spacer()
+            if model.contentKind == .json {
+                Picker("View", selection: $mode) {
+                    ForEach(Mode.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+            }
             navigation
         }
         .controlSize(.small)
@@ -128,7 +136,7 @@ struct CompareView: View {
             .keyboardShortcut(.downArrow, modifiers: [.command, .option])
             .help("Next change (⌥⌘↓)")
         }
-        .disabled(model.changeCount == 0 || mode != .sideBySide)
+        .disabled(model.changeCount == 0 || visibleMode != .sideBySide)
     }
 
     private var changeCounter: String {
@@ -157,13 +165,23 @@ struct CompareView: View {
                 Text(error.localizedDescription)
             }
         case .compared(let result):
-            switch mode {
+            switch visibleMode {
             case .sideBySide:
-                SideBySideDiffView(rows: result.rows, changeStarts: result.changeStarts, focusedChange: model.focusedChange)
+                SideBySideDiffView(
+                    rows: result.rows,
+                    changeStarts: result.changeStarts,
+                    focusedChange: model.focusedChange,
+                    longestLines: result.longestLines
+                )
             case .changes:
                 DifferenceListView(differences: result.differences)
             }
         }
+    }
+
+    /// Plain text has no structural list, so it's always side by side.
+    private var visibleMode: Mode {
+        model.contentKind == .json ? mode : .sideBySide
     }
 
     private var isShowingError: Binding<Bool> {

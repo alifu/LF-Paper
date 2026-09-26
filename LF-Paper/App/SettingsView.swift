@@ -11,6 +11,7 @@ struct SettingsView: View {
     @AppStorage(AppSettings.Key.editorFontSize) private var fontSize = AppSettings.defaultFontSize
     @AppStorage(AppSettings.Key.jsonIndentation) private var indentation = JSONIndentationSetting.twoSpaces
     @AppStorage(AppSettings.Key.autosaves) private var autosaves = false
+    @AppStorage(AppSettings.Key.wrapsLines) private var wrapsLines = AppSettings.defaultWrapsLines
     @AppStorage(AppSettings.Key.unsavedChangesOnClose) private var closeBehavior = UnsavedChangesOnClose.ask
 
     var body: some View {
@@ -33,26 +34,43 @@ struct SettingsView: View {
                 }
             }
 
+            Toggle("Wrap long lines (⌥⌘L)", isOn: $wrapsLines)
+            Caption("When off, long lines scroll sideways. The scratchpad always wraps.")
+
             Picker("JSON indentation:", selection: $indentation) {
                 ForEach(JSONIndentationSetting.allCases) { Text($0.title).tag($0) }
             }
             .fixedSize()
 
             Toggle("Save files automatically", isOn: $autosaves)
-            Text("Edits are saved a moment after you stop typing.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Caption("Edits are saved a moment after you stop typing.")
 
             Picker("Closing a window:", selection: $closeBehavior) {
                 ForEach(UnsavedChangesOnClose.allCases) { Text($0.title).tag($0) }
             }
             .fixedSize()
-            Text("What happens to unsaved changes when you close a window.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Caption("What happens to unsaved changes when you close a window.")
         }
         .padding(20)
-        .frame(width: 420)
+        .frame(width: 460)
+    }
+}
+
+/// Help text under a setting. It wraps instead of widening the form, which would push the
+/// labels past the window's edges.
+private struct Caption: View {
+    let text: String
+
+    init(_ text: String) {
+        self.text = text
+    }
+
+    var body: some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: 260, alignment: .leading)
     }
 }
 

@@ -119,6 +119,10 @@ final class WorkspaceModel {
     @ObservationIgnored private var pendingSelections: [UUID: NSRange] = [:]
     /// Set while one folder's tabs are swapped for another's, so neither session is overwritten.
     @ObservationIgnored private var isSwitchingFolders = false
+    /// Whether each document has a very long line, remembered with the text length it was checked at.
+    @ObservationIgnored private var longLineChecks: [UUID: (length: Int, hasLongLine: Bool)] = [:]
+    /// Documents whose "Format this file?" offer was turned down.
+    private(set) var declinedFormatOffers: Set<UUID> = []
 
     init(
         fileService: any FileService = LocalFileService(),
@@ -417,6 +421,36 @@ final class WorkspaceModel {
 
     var isJSONDocument: Bool {
         document.map { FileKind(fileExtension: $0.url.pathExtension) == .json } ?? false
+    }
+
+    /// The active file has a line so long (usually minified JSON) that it's edited without highlighting.
+    var editsAsPlainText: Bool {
+        guard let document else { return false }
+        let length = (document.text as NSString).length
+        if let check = longLineChecks[document.id], check.length == length {
+            return check.hasLongLine
+        }
+        let hasLongLine = LongLines.containsLongLine(document.text)
+        longLineChecks[document.id] = (length, hasLongLine)
+        return hasLongLine
+    }
+
+    /// Offer to format a JSON file with a very long line, unless that was turned down.
+    var offersFormatting: Bool {
+        guard let document, isJSONDocument, !declinedFormatOffers.contains(document.id) else { return false }
+        return editsAsPlainText
+    }
+
+    /// Whether the editor wraps lines, given the View › Wrap Lines setting. The scratchpad (prose)
+    /// always wraps, and so do files with a very long line: laying out a megabyte-long line on every
+    /// keystroke makes typing slow (about 0.3 s instead of 16 ms).
+    func wrapsLines(preference: Bool) -> Bool {
+        isScratchpadActive || editsAsPlainText || preference
+    }
+
+    func declineFormatting() {
+        guard let document else { return }
+        declinedFormatOffers.insert(document.id)
     }
 
     func updateDocumentText(_ text: String) {

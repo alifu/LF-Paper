@@ -59,4 +59,22 @@ struct CompareViewRenderingTests {
         let top = try firstContentRow(in: bitmap) / scale
         #expect(top <= Self.maximumTopInset, "source cards start \(top) pt below the top")
     }
+
+    /// Markdown against its saved version: text mode, without the JSON options.
+    @Test func comparesTextLineByLine() async throws {
+        let model = CompareModel()
+        model.show(ComparisonRequest(
+            left: CompareModel.Side(title: "notes.md — Saved", text: "# Notes\n\nThe quick brown fox.\n"),
+            right: CompareModel.Side(title: "notes.md — Edited", text: "# Notes\n\nThe slow brown fox.\nA new line.\n"),
+            kind: .text
+        ))
+        await model.comparisonTask?.value
+        #expect(model.changeCount == 1)
+
+        let bitmap = try render(model)
+        Attachment.record(try #require(bitmap.representation(using: .png, properties: [:])), named: "compare-text.png")
+
+        let scale = max(bitmap.pixelsHigh / Int(Self.size.height), 1)
+        #expect(try firstContentRow(in: bitmap) / scale <= Self.maximumTopInset)
+    }
 }

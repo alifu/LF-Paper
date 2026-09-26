@@ -13,7 +13,7 @@ nonisolated struct OpenDocument: Identifiable, Equatable, Sendable {
     let url: URL
     let text: String
     /// The text as it is on disk, used to tell whether there are unsaved changes.
-    private let savedText: String
+    let savedText: String
 
     init(url: URL, text: String) {
         self.init(id: UUID(), url: url, text: text, savedText: text)

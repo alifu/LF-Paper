@@ -70,3 +70,6 @@ ExportOptions.plist
 *.swp
 *~
 .claude/settings.local.json
+
+# Private planning notes, kept out of the repository
+docs/*

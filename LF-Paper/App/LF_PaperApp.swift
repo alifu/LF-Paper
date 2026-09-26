@@ -28,10 +28,10 @@ struct LF_PaperApp: App {
         .commands {
             SidebarCommands()
             TextEditingCommands()
-            WorkspaceCommands()
+            WorkspaceCommands(compare: compare)
         }
 
-        Window("Compare JSON", id: CompareView.windowID) {
+        Window("Compare", id: CompareView.windowID) {
             CompareView(model: compare)
                 .followsAppearanceSetting()
         }
