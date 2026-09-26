@@ -282,6 +282,28 @@ final class WorkspaceModelTests {
         #expect(model.document?.text == "")
     }
 
+    @Test func createJSONFileAddsUniqueUntitledJSONFilesStartingAsAnEmptyObject() throws {
+        let model = openedModel()
+
+        model.createFile(in: folder.url, type: .json)
+        model.createFile(in: folder.url, type: .json)
+
+        #expect(names(in: model) == ["Untitled 2.json", "Untitled.json"])
+        #expect(model.selection?.lastPathComponent == "Untitled 2.json")
+        #expect(model.document?.text == "{}\n")
+        #expect(model.document?.isDirty == false)
+        #expect(try folder.contents(of: "Untitled.json") == "{}\n")
+    }
+
+    @Test func markdownAndJSONFilesCanShareTheUntitledName() throws {
+        let model = openedModel()
+
+        model.createFile(in: folder.url, type: .markdown)
+        model.createFile(in: folder.url, type: .json)
+
+        #expect(Set(names(in: model)) == ["Untitled.md", "Untitled.json"])
+    }
+
     @Test func createFolderInsideSubfolderExpandsIt() throws {
         try folder.makeFolder("docs")
         let model = openedModel()

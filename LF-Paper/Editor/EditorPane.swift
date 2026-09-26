@@ -17,10 +17,15 @@ struct EditorPane: View {
                         _ = model.save()
                     }
                 }
+                if model.isJSONDocument {
+                    JSONEditorBar(model: model)
+                    Divider()
+                }
                 CodeTextView(
                     text: document.text,
                     documentID: document.id,
                     fileKind: FileKind(fileExtension: document.url.pathExtension),
+                    revealRequest: model.revealRequest,
                     onTextChange: { model.updateDocumentText($0) }
                 )
             }

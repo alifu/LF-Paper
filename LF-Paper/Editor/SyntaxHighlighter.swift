@@ -57,7 +57,8 @@ enum SyntaxHighlighters {
     static func highlighter(for kind: FileKind?) -> (any SyntaxHighlighter)? {
         switch kind {
         case .markdown: MarkdownHighlighter()
-        case .json, .folder, nil: nil // JSON highlighting arrives with the JSON editor (Phase 5).
+        case .json: JSONHighlighter()
+        case .folder, nil: nil
         }
     }
 }

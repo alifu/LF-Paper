@@ -37,6 +37,15 @@ struct WorkspaceCommands: Commands {
             .keyboardShortcut("p", modifiers: [.command, .option])
             .disabled(workspace == nil)
         }
+        CommandMenu("JSON") {
+            Group {
+                Button("Format") { workspace?.formatJSON() }
+                    .keyboardShortcut("f", modifiers: [.option, .shift])
+                Button("Format with Sorted Keys") { workspace?.formatJSON(sortsKeys: true) }
+                Button("Minify") { workspace?.minifyJSON() }
+            }
+            .disabled(workspace?.isJSONDocument != true)
+        }
     }
 
     private var showsHiddenFiles: Binding<Bool> {

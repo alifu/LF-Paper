@@ -72,7 +72,9 @@ struct SidebarView: View {
     @ViewBuilder
     private func menu(for item: FileItem?) -> some View {
         if let folder = model.targetFolder(for: item) {
-            Button("New File") { model.createFile(in: folder) }
+            ForEach(NewFileType.allCases, id: \.self) { type in
+                Button(type.menuTitle) { model.createFile(in: folder, type: type) }
+            }
             Button("New Folder") { model.createFolder(in: folder) }
         }
         if let item {

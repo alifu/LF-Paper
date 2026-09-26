@@ -24,11 +24,22 @@ final class WorkspaceModel {
     }
 
     private enum NewItem {
-        case file
+        case file(NewFileType)
         case folder
 
-        var baseName: String { self == .file ? "Untitled" : "New Folder" }
-        var fileExtension: String? { self == .file ? "md" : nil }
+        var baseName: String {
+            switch self {
+            case .file: "Untitled"
+            case .folder: "New Folder"
+            }
+        }
+
+        var fileExtension: String? {
+            switch self {
+            case .file(let type): type.fileExtension
+            case .folder: nil
+            }
+        }
     }
 
     private static let logger = Logger(subsystem: "AppWork.LF-Paper", category: "Workspace")
@@ -37,7 +48,13 @@ final class WorkspaceModel {
     /// Loaded folder contents. Only the root and expanded folders are kept up to date.
     private(set) var childrenByFolder: [URL: [FileItem]] = [:]
     private(set) var expandedFolders: Set<URL> = []
-    private(set) var document: OpenDocument?
+    private(set) var document: OpenDocument? {
+        didSet { json.documentDidChange(document) }
+    }
+    /// Validation and tree for the open document when it's JSON.
+    let json = JSONSession()
+    /// The latest request for the editor to select and show a range (a JSON error or tree value).
+    private(set) var revealRequest: RevealRequest?
     /// The open file was deleted on disk while it had unsaved changes. Saving recreates it.
     private(set) var isDocumentMissingOnDisk = false
     private(set) var pendingAction: PendingAction?
@@ -181,8 +198,8 @@ final class WorkspaceModel {
 
     // MARK: File operations
 
-    func createFile(in folder: URL) {
-        create(.file, in: folder)
+    func createFile(in folder: URL, type: NewFileType = .markdown) {
+        create(.file(type), in: folder)
     }
 
     func createFolder(in folder: URL) {
@@ -216,8 +233,17 @@ final class WorkspaceModel {
 
     // MARK: Document
 
+    var isJSONDocument: Bool {
+        document.map { FileKind(fileExtension: $0.url.pathExtension) == .json } ?? false
+    }
+
     func updateDocumentText(_ text: String) {
         document = document?.editing(text)
+    }
+
+    /// Asks the editor to select `range` and scroll to it. Each call is a new request.
+    func reveal(_ range: NSRange, focusesEditor: Bool) {
+        revealRequest = RevealRequest(range: range, focusesEditor: focusesEditor)
     }
 
     /// Writes unsaved changes. Returns `false` (and presents the error) if the write failed.
@@ -328,9 +354,15 @@ final class WorkspaceModel {
             existing: existingNames
         )
         do throws(AppError) {
-            let created = switch newItem {
-            case .file: try fileService.createFile(named: name, in: folder)
-            case .folder: try fileService.createFolder(named: name, in: folder)
+            let created: URL
+            switch newItem {
+            case .file(let type):
+                created = try fileService.createFile(named: name, in: folder)
+                if !type.initialContents.isEmpty {
+                    try fileService.write(type.initialContents, to: created)
+                }
+            case .folder:
+                created = try fileService.createFolder(named: name, in: folder)
             }
             if folder != rootURL {
                 expandedFolders.insert(folder)

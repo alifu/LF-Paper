@@ -142,6 +142,48 @@ final class CodeTextViewCoordinatorTests {
         #expect(plainColor == NSColor.textColor)
     }
 
+    @Test func changesFromOutsideTheSameDocumentCanBeUndone() throws {
+        let id = UUID()
+        coordinator.update(text: "old", documentID: id, fileKind: nil)
+
+        coordinator.update(text: "formatted", documentID: id, fileKind: nil)
+        RunLoop.main.run(until: Date()) // closes the undo group, as the event loop would
+        let undoManager = try #require(coordinator.undoManager(for: textView))
+
+        #expect(undoManager.canUndo)
+        undoManager.undo()
+        #expect(textView.string == "old")
+    }
+
+    // MARK: Revealing
+
+    @Test func revealRequestSelectsTheRange() {
+        let request = RevealRequest(range: NSRange(location: 2, length: 3), focusesEditor: false)
+
+        coordinator.update(text: "0123456789", documentID: UUID(), fileKind: nil, revealRequest: request)
+
+        #expect(textView.selectedRange() == NSRange(location: 2, length: 3))
+    }
+
+    @Test func revealRangesAreClampedToTheText() {
+        let request = RevealRequest(range: NSRange(location: 8, length: 10), focusesEditor: false)
+
+        coordinator.update(text: "0123456789", documentID: UUID(), fileKind: nil, revealRequest: request)
+
+        #expect(textView.selectedRange() == NSRange(location: 8, length: 2))
+    }
+
+    @Test func theSameRevealRequestIsAppliedOnlyOnce() {
+        let id = UUID()
+        let request = RevealRequest(range: NSRange(location: 2, length: 3), focusesEditor: false)
+        coordinator.update(text: "0123456789", documentID: id, fileKind: nil, revealRequest: request)
+        textView.setSelectedRange(NSRange(location: 0, length: 0)) // the user moves on
+
+        coordinator.update(text: "0123456789", documentID: id, fileKind: nil, revealRequest: request)
+
+        #expect(textView.selectedRange() == NSRange(location: 0, length: 0))
+    }
+
     @Test func textChangedOutsideTheEditorIsLoaded() {
         let id = UUID()
         coordinator.update(text: "old", documentID: id, fileKind: .markdown)
