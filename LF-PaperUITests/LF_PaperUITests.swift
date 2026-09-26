@@ -5,6 +5,7 @@
 //  Created by Alif Ramadhoni on 26/09/26.
 //
 
+import AppKit
 import XCTest
 
 /// The main flows, end to end. The app opens a fresh folder of sample files
@@ -99,6 +100,31 @@ final class LF_PaperUITests: XCTestCase {
         waitUntil("⌘W closes the active tab") { !self.element("tab-data.json").exists }
         XCTAssertTrue(element("tab-README.md").exists)
         XCTAssertTrue(editorText().hasPrefix("# Fixture"))
+    }
+
+    @MainActor
+    func testScratchpadKeepsItsTextAndCopiesIt() throws {
+        openFile("README.md")
+        app.typeKey("e", modifierFlags: [.command, .shift])
+        let scratchTab = waitFor("tab-Scratch")
+        waitUntil("⇧⌘E shows the scratchpad") { self.editorText().isEmpty }
+
+        let editor = waitFor("editor")
+        editor.click()
+        editor.typeText("Summarize this file.")
+        XCTAssertEqual(scratchTab.label, "Scratch") // never marked as edited
+        app.typeKey("c", modifierFlags: [.command, .option, .shift])
+        waitUntil("Copy All puts the text on the pasteboard") {
+            NSPasteboard.general.string(forType: .string) == "Summarize this file."
+        }
+
+        app.typeKey("w", modifierFlags: .command)
+        XCTAssertTrue(scratchTab.exists, "⌘W doesn't close the Scratch tab")
+
+        waitFor("tab-README.md").click()
+        waitUntil("the file tab shows its file") { self.editorText().hasPrefix("# Fixture") }
+        scratchTab.click()
+        waitUntil("the scratchpad kept its text") { self.editorText() == "Summarize this file." }
     }
 
     @MainActor

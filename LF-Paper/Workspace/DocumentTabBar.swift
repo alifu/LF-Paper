@@ -5,18 +5,40 @@
 
 import SwiftUI
 
-/// A row of tabs for the open files: click to switch, × (or ⌘W) to close. A dot marks unsaved changes.
+/// The pinned Scratch tab, then a row of tabs for the open files: click to switch, × (or ⌘W) to close.
+/// A dot marks unsaved changes.
 struct DocumentTabBar: View {
     let model: WorkspaceModel
 
     var body: some View {
+        HStack(spacing: 0) {
+            DocumentTab(
+                name: "Scratch",
+                systemImage: "square.and.pencil",
+                isActive: model.isScratchpadActive,
+                hasUnsavedChanges: false,
+                onSelect: { model.showScratchpad() },
+                onClose: nil,
+                tooltip: "Scratchpad: never saved (⇧⌘E)"
+            )
+            .fixedSize(horizontal: true, vertical: false) // pinned: only as wide as its label
+            Divider()
+            fileTabs
+        }
+        .frame(height: DocumentTab.height)
+        .background(.bar)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Open files")
+    }
+
+    private var fileTabs: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 0) {
                     ForEach(model.tabs) { document in
                         DocumentTab(
                             name: document.url.lastPathComponent,
-                            kind: FileKind(fileExtension: document.url.pathExtension),
+                            systemImage: FileKind(fileExtension: document.url.pathExtension)?.systemImage ?? "doc",
                             isActive: document.id == model.document?.id,
                             hasUnsavedChanges: model.hasUnsavedChanges(inTab: document.id),
                             onSelect: { model.activateTab(document.id) },
@@ -31,10 +53,6 @@ struct DocumentTabBar: View {
                 if let id { withAnimation { proxy.scrollTo(id) } }
             }
         }
-        .frame(height: DocumentTab.height)
-        .background(.bar)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Open files")
     }
 }
 
@@ -42,27 +60,31 @@ private struct DocumentTab: View {
     static let height: CGFloat = 30
 
     let name: String
-    let kind: FileKind?
+    let systemImage: String
     let isActive: Bool
     let hasUnsavedChanges: Bool
     let onSelect: () -> Void
-    let onClose: () -> Void
+    /// `nil` for a tab that can't be closed (the Scratch tab).
+    let onClose: (() -> Void)?
+    var tooltip: String?
 
     @State private var isHovering = false
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: kind?.systemImage ?? "doc")
+            Image(systemName: systemImage)
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
             Text(name)
                 .lineLimit(1)
                 .truncationMode(.middle)
-            closeButton
+            if let onClose {
+                closeButton(onClose)
+            }
         }
         .font(.callout)
         .padding(.leading, 10)
-        .padding(.trailing, 6)
+        .padding(.trailing, onClose == nil ? 10 : 6)
         .frame(maxWidth: 220, maxHeight: .infinity)
         .background(isActive ? AnyShapeStyle(.background) : AnyShapeStyle(.clear))
         .overlay(alignment: .bottom) {
@@ -76,14 +98,18 @@ private struct DocumentTab: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(hasUnsavedChanges ? "\(name), edited" : name)
         .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
-        .accessibilityAction(named: "Close", onClose)
         .accessibilityAction(.default, onSelect)
+        .accessibilityActions {
+            if let onClose {
+                Button("Close", action: onClose)
+            }
+        }
         .accessibilityIdentifier("tab-\(name)")
-        .help(name)
+        .help(tooltip ?? name)
     }
 
     /// A dot for unsaved changes that turns into × on hover, like Xcode and Safari.
-    private var closeButton: some View {
+    private func closeButton(_ onClose: @escaping () -> Void) -> some View {
         Button(action: onClose) {
             Image(systemName: hasUnsavedChanges && !isHovering ? "circle.fill" : "xmark")
                 .font(.system(size: hasUnsavedChanges && !isHovering ? 7 : 9, weight: .semibold))

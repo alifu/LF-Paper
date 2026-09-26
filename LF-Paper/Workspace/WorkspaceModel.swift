@@ -3,12 +3,12 @@
 //  LF-Paper
 //
 
-import Foundation
+import AppKit
 import Observation
 import os
 
 /// State for one workspace window: the open folder, its lazily loaded tree,
-/// the selection and the open files (tabs).
+/// the selection, the open files (tabs) and the scratchpad.
 @Observable
 final class WorkspaceModel {
     /// Something that would throw away unsaved changes and so waits for a decision first.
@@ -51,6 +51,18 @@ final class WorkspaceModel {
     private var openTabs: DocumentTabs = .empty {
         didSet { json.documentDidChange(document) }
     }
+    /// Whether the scratchpad is showing instead of the active file tab.
+    private(set) var isScratchpadActive = false {
+        didSet {
+            if isScratchpadActive != oldValue { json.documentDidChange(document) }
+        }
+    }
+    /// Throwaway text that is never saved, restored or counted as unsaved changes.
+    private(set) var scratchpadText = ""
+    /// Changes on every copy of the scratchpad, so the bar can confirm it.
+    private(set) var scratchpadCopyID: UUID?
+    /// The scratchpad's editor identity, stable so it keeps its own undo history.
+    let scratchpadID = UUID()
     /// Validation and tree for the open document when it's JSON.
     let json = JSONSession()
     /// The latest request for the editor to select and show a range (a JSON error or tree value).
@@ -96,8 +108,11 @@ final class WorkspaceModel {
     /// The open files, in tab order.
     var tabs: [OpenDocument] { openTabs.documents }
 
-    /// The file in the active tab.
-    var document: OpenDocument? { openTabs.active }
+    /// The file in the active tab; `nil` while the scratchpad is showing.
+    var document: OpenDocument? { isScratchpadActive ? nil : openTabs.active }
+
+    /// Everything the editor keeps an undo history for: the open files and the scratchpad.
+    var editorDocumentIDs: Set<UUID> { Set(tabs.map(\.id)).union([scratchpadID]) }
 
     /// Whether any tab has unsaved changes.
     var hasUnsavedChanges: Bool { openTabs.hasUnsavedChanges }
@@ -190,6 +205,7 @@ final class WorkspaceModel {
     // MARK: Tabs
 
     func activateTab(_ id: UUID) {
+        isScratchpadActive = false
         openTabs = openTabs.activating(id)
         syncSelectionWithActiveTab()
     }
@@ -213,6 +229,38 @@ final class WorkspaceModel {
 
     func closeActiveTab() {
         document.map { closeTab($0.id) }
+    }
+
+    // MARK: Scratchpad
+
+    func showScratchpad() {
+        isScratchpadActive = true
+        syncSelectionWithActiveTab()
+    }
+
+    /// Shows the scratchpad, or goes back to the last file tab when it's already showing.
+    func toggleScratchpad() {
+        guard isScratchpadActive else {
+            showScratchpad()
+            return
+        }
+        guard let lastTab = openTabs.active else { return }
+        activateTab(lastTab.id)
+    }
+
+    func updateScratchpadText(_ text: String) {
+        scratchpadText = text
+    }
+
+    /// Empties the scratchpad; the editor applies it as an ordinary edit, so Undo brings the text back.
+    func clearScratchpad() {
+        scratchpadText = ""
+    }
+
+    func copyScratchpad(to pasteboard: NSPasteboard = .general) {
+        pasteboard.clearContents()
+        pasteboard.setString(scratchpadText, forType: .string)
+        scratchpadCopyID = UUID()
     }
 
     // MARK: Tree
@@ -398,6 +446,7 @@ final class WorkspaceModel {
               let item = item(at: selection),
               !item.isFolder
         else { return }
+        isScratchpadActive = false
         if let open = openTabs.document(at: item.url) {
             openTabs = openTabs.activating(open.id)
         } else {

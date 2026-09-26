@@ -20,16 +20,15 @@ struct WorkspaceView: View {
                 .navigationSplitViewColumnWidth(min: 180, ideal: 240, max: 400)
         } detail: {
             VStack(spacing: 0) {
-                if !model.tabs.isEmpty {
-                    DocumentTabBar(model: model)
-                    Divider()
-                }
+                DocumentTabBar(model: model)
+                Divider()
                 HSplitView {
-                    if model.editorLayout.showsEditor {
+                    // The scratchpad has no preview; it always gets the full width.
+                    if model.editorLayout.showsEditor || model.isScratchpadActive {
                         EditorPane(model: model)
                             .frame(minWidth: 300, maxWidth: .infinity, maxHeight: .infinity)
                     }
-                    if model.editorLayout.showsPreview {
+                    if model.editorLayout.showsPreview && !model.isScratchpadActive {
                         PreviewPane(model: model)
                             .frame(minWidth: 240, maxWidth: .infinity, maxHeight: .infinity)
                     }
@@ -46,6 +45,7 @@ struct WorkspaceView: View {
                     }
                 }
                 .pickerStyle(.segmented)
+                .disabled(model.isScratchpadActive)
                 .help("Editor, editor and preview, or preview only (⌥⌘P shows or hides the preview)")
             }
         }
@@ -103,6 +103,7 @@ struct WorkspaceView: View {
     }
 
     private var subtitle: String {
+        if model.isScratchpadActive { return "Scratchpad" }
         guard let name = model.document?.url.lastPathComponent else { return "" }
         return model.activeTabHasUnsavedChanges ? "\(name) — Edited" : name
     }

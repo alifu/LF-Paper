@@ -118,6 +118,35 @@ final class CodeTextViewCoordinatorTests {
         #expect(coordinator.undoManager(for: textView) !== firstUndo)
     }
 
+    @Test func switchingBetweenTheScratchpadAndAFileKeepsBothUndoHistories() throws {
+        let folder = try TemporaryDirectory()
+        try folder.makeFile("a.md", contents: "A")
+        let suiteName = "LFPaperTests.\(UUID().uuidString)"
+        defer { UserDefaults.standard.removePersistentDomain(forName: suiteName) }
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let model = WorkspaceModel(
+            bookmarkStore: BookmarkStore(defaults: defaults),
+            recentFolders: RecentFolders(defaults: defaults),
+            watchesFileSystem: false
+        )
+        model.openFolder(folder.url)
+        model.selection = try #require(model.children(of: folder.url).first).url
+        let file = try #require(model.document)
+
+        coordinator.update(text: file.text, documentID: file.id, fileKind: .markdown, openDocumentIDs: model.editorDocumentIDs)
+        let fileUndo = coordinator.undoManager(for: textView)
+        model.showScratchpad()
+        coordinator.update(text: model.scratchpadText, documentID: model.scratchpadID, fileKind: nil, openDocumentIDs: model.editorDocumentIDs)
+        let scratchpadUndo = coordinator.undoManager(for: textView)
+        model.toggleScratchpad()
+        coordinator.update(text: file.text, documentID: file.id, fileKind: .markdown, openDocumentIDs: model.editorDocumentIDs)
+        #expect(coordinator.undoManager(for: textView) === fileUndo)
+
+        model.toggleScratchpad()
+        coordinator.update(text: model.scratchpadText, documentID: model.scratchpadID, fileKind: nil, openDocumentIDs: model.editorDocumentIDs)
+        #expect(coordinator.undoManager(for: textView) === scratchpadUndo)
+    }
+
     @Test func changingTheFontSizeRestylesAllText() throws {
         let id = UUID()
         coordinator.update(text: "# Title\nplain", documentID: id, fileKind: .markdown)

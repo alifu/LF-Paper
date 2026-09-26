@@ -33,6 +33,7 @@ struct WorkspaceCommands: Commands {
         CommandGroup(replacing: .saveItem) {
             Button(workspace?.document == nil ? "Close" : "Close Tab") { close() }
                 .keyboardShortcut("w")
+                .disabled(workspace?.isScratchpadActive == true) // the Scratch tab can't be closed
             Button("Save") { workspace?.save() }
                 .keyboardShortcut("s")
                 .disabled(workspace?.activeTabHasUnsavedChanges != true)
@@ -84,7 +85,9 @@ struct WorkspaceCommands: Commands {
     }
 
     /// Closes the active tab, or the window when no file is open (or another window is in front).
+    /// Does nothing while the scratchpad is showing.
     private func close() {
+        guard workspace?.isScratchpadActive != true else { return }
         if let workspace, workspace.document != nil {
             workspace.closeActiveTab()
         } else {
@@ -105,7 +108,9 @@ struct WorkspaceCommands: Commands {
             }
         }
         .keyboardShortcut("p", modifiers: [.command, .option])
-        .disabled(workspace == nil)
+        .disabled(workspace == nil || workspace?.isScratchpadActive == true)
+        Divider()
+        scratchpadItems
         Divider()
         Button("Show Next Tab") { workspace?.activateNextTab() }
             .keyboardShortcut("]", modifiers: [.command, .shift])
@@ -123,6 +128,17 @@ struct WorkspaceCommands: Commands {
         Button("Actual Size") { fontSize = AppSettings.fontSize(fontSize, zoomed: .actualSize) }
             .keyboardShortcut("0")
             .disabled(fontSize == AppSettings.defaultFontSize)
+    }
+
+    @ViewBuilder
+    private var scratchpadItems: some View {
+        let isShowing = workspace?.isScratchpadActive == true
+        Button(isShowing ? "Hide Scratchpad" : "Show Scratchpad") { workspace?.toggleScratchpad() }
+            .keyboardShortcut("e", modifiers: [.command, .shift])
+            .disabled(workspace == nil || (isShowing && workspace?.tabs.isEmpty == true))
+        Button("Copy Scratchpad") { workspace?.copyScratchpad() }
+            .keyboardShortcut("c", modifiers: [.command, .option, .shift])
+            .disabled(workspace?.scratchpadText.isEmpty != false)
     }
 
     private var showsHiddenFiles: Binding<Bool> {
