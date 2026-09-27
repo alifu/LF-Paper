@@ -19,6 +19,8 @@ nonisolated enum AppError: Error, Equatable, Sendable {
     case notInLastCommit(String)
     /// The repository couldn't be read (damaged or in a format LF-Paper doesn't read).
     case gitReadFailed(String)
+    /// Convert (YAML, CSV) couldn't be done; the text says why.
+    case conversionFailed(String)
 }
 
 nonisolated extension AppError {
@@ -65,6 +67,8 @@ nonisolated extension AppError: LocalizedError {
             "“\(name)” isn’t in the last commit."
         case .gitReadFailed(let name):
             "The last commit of “\(name)” could not be read."
+        case .conversionFailed(let reason):
+            reason
         }
     }
 
@@ -88,6 +92,8 @@ nonisolated extension AppError: LocalizedError {
             "Commit the file first, or check that it isn’t ignored."
         case .gitReadFailed:
             "The repository may be damaged or use a format LF-Paper can’t read yet."
+        case .conversionFailed:
+            nil
         }
     }
 }

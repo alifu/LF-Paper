@@ -22,11 +22,11 @@ struct PreviewPane: View {
                 )
             case .json:
                 JSONTreePane(model: model)
-            case .folder, nil:
+            case .yaml, .csv, .folder, nil:
                 ContentUnavailableView(
                     "No Preview",
                     systemImage: "eye.slash",
-                    description: Text("Preview is available for Markdown and JSON files.")
+                    description: Text("Preview is available for Markdown and JSON files. Convert YAML and CSV to JSON from the JSON menu.")
                 )
             }
         } else {

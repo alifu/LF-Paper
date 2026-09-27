@@ -26,6 +26,19 @@ extension WorkspaceModel {
         reveal(range, focusesEditor: false)
     }
 
+    /// Checks the open JSON file against its schema, using the latest valid parse.
+    /// While the text has a syntax error the previous result stays.
+    func checkSchema() async {
+        guard let document, isJSONDocument, json.status == .valid, let parsed = json.lastValid else { return }
+        await schema.check(document: parsed, text: document.text, documentURL: document.url)
+    }
+
+    /// Selects a schema problem in the editor.
+    func reveal(_ issue: SchemaIssue) {
+        guard let range = issue.range else { return }
+        reveal(range, focusesEditor: true)
+    }
+
     /// Replaces the document text with `transform(parsed value)`, as an ordinary (undoable) edit.
     /// A final newline is kept if the file had one. Invalid JSON is left alone and its error shown.
     private func rewriteJSON(_ transform: (JSONValue) -> String) {

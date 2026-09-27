@@ -87,6 +87,8 @@ final class WorkspaceModel {
     let scrollSync = ScrollSync()
     /// The headings of the Markdown file, for the Outline sidebar.
     let outline = OutlineSession()
+    /// The open JSON file checked against its schema.
+    let schema = SchemaSession()
     /// Validation and tree for the open document when it's JSON.
     let json = JSONSession()
     /// The latest request for the editor to select and show a range (a JSON error or tree value).
@@ -230,9 +232,9 @@ final class WorkspaceModel {
         }
     }
 
-    /// Reverts every tab to its saved text; tabs whose file is gone are closed.
+    /// Reverts every tab to its saved text; tabs whose file is gone, or was never saved, are closed.
     func discardUnsavedChanges() {
-        for id in openTabs.missingOnDisk {
+        for id in openTabs.missingOnDisk.union(tabs.filter(\.isNew).map(\.id)) {
             openTabs = openTabs.closing(id)
         }
         for document in tabs where document.isDirty {
@@ -583,6 +585,7 @@ final class WorkspaceModel {
         do throws(AppError) {
             try fileService.write(document.text, to: document.url)
             openTabs = openTabs.replacing(document.markingSaved()).marking(id, missingOnDisk: false)
+            if document.isNew { reloadAll() } // show the new file in the sidebar
             return true
         } catch {
             present(error)
@@ -622,6 +625,16 @@ final class WorkspaceModel {
         recentFiles = Array(([url] + others).prefix(Self.recentFilesLimit))
     }
 
+    /// Opens `text` in a new, unsaved tab named like `source` with another extension, next to it.
+    func openNewFile(_ text: String, fileExtension: String, nextTo source: URL) {
+        let folder = source.deletingLastPathComponent()
+        let taken = Set(children(of: folder).map(\.name) + tabs.filter { $0.url.deletingLastPathComponent().refersToSameFile(as: folder) }.map(\.url.lastPathComponent))
+        let name = FileNaming.uniqueName(base: source.deletingPathExtension().lastPathComponent, fileExtension: fileExtension, existing: taken)
+        isScratchpadActive = false
+        openTabs = openTabs.opening(.newFile(at: folder.appending(path: name, directoryHint: .notDirectory), text: text))
+        syncSelectionWithActiveTab() // so choosing the source file in the sidebar switches back to it
+    }
+
     private func openFile(at url: URL) {
         do throws(AppError) {
             openTabs = openTabs.opening(OpenDocument(url: url, text: try fileService.read(url)))
@@ -641,7 +654,8 @@ final class WorkspaceModel {
         autosaveTask = Task { [weak self] in
             try? await Task.sleep(for: autosaveDelay) // a cancelled sleep ends early; checked below
             guard !Task.isCancelled, let self else { return }
-            for document in self.tabs where document.isDirty && !self.openTabs.missingOnDisk.contains(document.id) {
+            // Files deleted on disk or never saved are only written by an explicit Save.
+            for document in self.tabs where document.isDirty && !document.isNew && !self.openTabs.missingOnDisk.contains(document.id) {
                 _ = self.save(document.id)
             }
         }
@@ -661,6 +675,7 @@ final class WorkspaceModel {
     }
 
     private func syncWithDisk(_ document: OpenDocument) {
+        guard !document.isNew else { return } // not on disk until it's saved
         guard fileService.exists(document.url) else {
             openTabs = document.isDirty
                 ? openTabs.marking(document.id, missingOnDisk: true)

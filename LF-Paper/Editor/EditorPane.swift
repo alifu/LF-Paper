@@ -73,6 +73,11 @@ struct EditorPane: View {
                 _ = model.save()
             }
         }
+        if let document = model.document, document.isNew {
+            NewFileBanner(fileName: document.url.lastPathComponent) {
+                _ = model.save()
+            }
+        }
         if model.offersFormatting, let document = model.document {
             FormatOfferBanner(fileName: document.url.lastPathComponent, model: model)
         }
@@ -120,5 +125,25 @@ private struct MissingFileBanner: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(.yellow.opacity(0.15))
+    }
+}
+
+/// A converted file that isn't on disk yet: nothing is written until it's saved.
+private struct NewFileBanner: View {
+    let fileName: String
+    let onSave: () -> Void
+
+    var body: some View {
+        HStack {
+            Label("“\(fileName)” is new and not saved yet.", systemImage: "doc.badge.plus")
+            Spacer()
+            Button("Save", action: onSave)
+        }
+        .controlSize(.small)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.green.opacity(0.12))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("new-file-banner")
     }
 }

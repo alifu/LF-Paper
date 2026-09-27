@@ -63,7 +63,7 @@ enum SyntaxHighlighters {
         switch kind {
         case .markdown: MarkdownHighlighter()
         case .json: JSONHighlighter()
-        case .folder, nil: nil
+        case .yaml, .csv, .folder, nil: nil
         }
     }
 }

@@ -202,6 +202,13 @@ struct WorkspaceCommands: Commands {
         }
         .disabled(workspace?.isJSONDocument != true)
         Divider()
+        Button("Convert to YAML") { workspace?.convertToYAML() }
+            .disabled(workspace?.canConvertFromJSON != true)
+        Button("Convert to CSV") { workspace?.convertToCSV() }
+            .disabled(workspace?.canConvertFromJSON != true)
+        Button("Convert to JSON") { workspace?.convertToJSON(indentation: indentation.indentation) }
+            .disabled(workspace?.canConvertToJSON != true)
+        Divider()
         Button("Compare…") { openWindow(id: CompareView.windowID) }
             .keyboardShortcut("c", modifiers: [.command, .option])
     }

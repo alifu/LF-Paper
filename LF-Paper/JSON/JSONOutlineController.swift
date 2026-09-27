@@ -67,6 +67,10 @@ final class JSONOutlineController: NSObject {
         scrollView.borderType = .noBorder
     }
 
+    /// A filter or query showing more rows than this opens only the top level, so a broad query
+    /// (such as `$` on a large file) doesn't expand hundreds of thousands of rows.
+    static let autoExpandLimit = 5_000
+
     /// Shows a tree. Does nothing unless the parse `version` or the filter changed.
     func show(root node: JSONTreeNode?, version: Int, visiblePaths: Set<JSONPath>?) {
         guard version != shownVersion || visiblePaths != shownVisiblePaths else { return }
@@ -80,9 +84,9 @@ final class JSONOutlineController: NSObject {
         defer { isReloading = false }
         outlineView.reloadData()
         guard let root else { return }
-        if visiblePaths != nil {
+        if let visiblePaths, visiblePaths.count <= Self.autoExpandLimit {
             outlineView.expandItem(root, expandChildren: true) // only matches are loaded, so this is small
-        } else if expanded.isEmpty {
+        } else if visiblePaths != nil || expanded.isEmpty {
             outlineView.expandItem(root)
         } else {
             restoreExpansion(of: expanded)

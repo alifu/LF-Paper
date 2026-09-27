@@ -56,6 +56,17 @@ final class JSONOutlineControllerTests {
         #expect(rowTitles == ["root", "tags", "[0]"])
     }
 
+    @Test func aHugeQueryResultOpensOnlyTheTopLevel() throws {
+        let big = "[" + (0..<3_000).map { #"{"id":\#($0)}"# }.joined(separator: ",") + "]"
+        let bigRoot = JSONTreeNode(root: try JSONParser.parse(big).value)
+        let everything = try #require(JSONTreeSearch.result(for: "$..*", in: bigRoot.value).visiblePaths)
+        #expect(everything.count > JSONOutlineController.autoExpandLimit)
+
+        controller.show(root: bigRoot, version: 1, visiblePaths: everything)
+
+        #expect(outline.numberOfRows == 3_001) // the root and its items, not each item's contents
+    }
+
     @Test func expandedItemsStayExpandedAfterAReparse() throws {
         controller.show(root: root, version: 1, visiblePaths: nil)
         outline.expandItem(outline.item(atRow: try #require(row(of: "$.user"))))

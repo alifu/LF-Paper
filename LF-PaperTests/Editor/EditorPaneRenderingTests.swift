@@ -52,6 +52,15 @@ struct EditorPaneRenderingTests {
         try expectVisible(workspace.model, appearance: .aqua, named: "missing")
     }
 
+    @Test func saysANewFileIsNotSavedYet() throws {
+        let workspace = try TestWorkspace(files: ["data.json": #"[{"a": 1}]"#])
+        try workspace.open("data.json")
+        workspace.model.convertToYAML()
+        #expect(workspace.model.document?.isNew == true)
+
+        try expectVisible(workspace.model, appearance: .aqua, named: "new-file")
+    }
+
     @Test func showsTheScratchpadBarAndText() throws {
         let workspace = try TestWorkspace()
         workspace.model.showScratchpad()

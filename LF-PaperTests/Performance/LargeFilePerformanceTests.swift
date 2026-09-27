@@ -87,21 +87,22 @@ struct LargeFilePerformanceTests {
     /// (what files with very long lines get). Average of 10 keystrokes each.
     @Test @MainActor func typingInAMinifiedLineAsPlainText() {
         let oneLine = String(Self.largeJSON.prefix(1_000_000))
-        func averageKeystroke(fileKind: FileKind?, wrapsLines: Bool = true) -> Duration {
+        func averageKeystroke(fileKind: FileKind?, wrapsLines: Bool = true, keystrokes: Int = 10) -> Duration {
             let views = CodeTextView.makeEditorViews()
             views.scrollView.frame = NSRect(x: 0, y: 0, width: 800, height: 600)
             let coordinator = CodeTextView.Coordinator { _ in }
             coordinator.attach(textView: views.textView, ruler: views.ruler)
             coordinator.update(text: oneLine, documentID: UUID(), fileKind: fileKind, wrapsLines: wrapsLines)
             let (_, total) = Self.measure {
-                for _ in 0..<10 {
+                for _ in 0..<keystrokes {
                     views.textView.insertText("x", replacementRange: NSRange(location: 500_000, length: 0))
                 }
             }
-            return total / 10
+            return total / keystrokes
         }
 
-        let highlighted = averageKeystroke(fileKind: .json)
+        // Seconds per keystroke, so only two: ten took about a minute and could be killed in a busy run.
+        let highlighted = averageKeystroke(fileKind: .json, keystrokes: 2)
         let plain = averageKeystroke(fileKind: nil)
         let plainScrolling = averageKeystroke(fileKind: nil, wrapsLines: false)
 

@@ -197,6 +197,28 @@ final class LF_PaperUITests: XCTestCase {
     }
 
     @MainActor
+    func testJSONPathQueryFiltersTheTree() throws {
+        openFile("data.json")
+        let field = waitFor("json-query-field")
+        field.click()
+        field.typeText("$.languages[*]")
+
+        let status = waitFor("json-query-status")
+        waitUntil("the query finds both languages") { (status.value as? String ?? status.label) == "2 matches" }
+    }
+
+    @MainActor
+    func testConvertingJSONOpensANewUnsavedTab() throws {
+        openFile("data.json")
+
+        chooseMenuItem("Convert to YAML", inMenu: "JSON")
+
+        waitFor("tab-data.yaml")
+        XCTAssertTrue(waitFor("new-file-banner").exists)
+        XCTAssertTrue(editorText().hasPrefix("name: Ada"))
+    }
+
+    @MainActor
     func testCompareTwoFiles() throws {
         waitFor("file-data.json").rightClick()
         app.menuItems["Compare as Left"].click()

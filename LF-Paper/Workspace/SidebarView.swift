@@ -27,11 +27,16 @@ struct SidebarView: View {
             .labelsHidden()
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
-            switch model.sidebarMode {
-            case .files: files
-            case .search: FolderSearchView(model: model)
-            case .outline: OutlineView(model: model)
+            Group {
+                switch model.sidebarMode {
+                case .files: files
+                case .search: FolderSearchView(model: model)
+                case .outline: OutlineView(model: model)
+                }
             }
+            // Always fill the space below the picker: a short message (such as "No Outline")
+            // would otherwise be centred, taking the picker down to the middle with it.
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 

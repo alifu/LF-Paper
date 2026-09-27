@@ -5,22 +5,28 @@
 
 import SwiftUI
 
-/// The preview column for JSON files: a filterable tree. Selecting a value highlights it in the editor.
+/// The preview column for JSON files: a tree filtered by text or by a JSONPath query (text starting
+/// with `$`, such as `$.users[?(@.active)].name`). Selecting a value highlights it in the editor.
 struct JSONTreePane: View {
     let model: WorkspaceModel
     @State private var query = ""
-    @State private var visiblePaths: Set<JSONPath>?
+    @State private var search = JSONTreeSearch.Result.everything
 
     var body: some View {
         let session = model.json
         VStack(spacing: 0) {
-            TextField("Filter keys and values", text: $query)
-                .textFieldStyle(.roundedBorder)
-                .padding(8)
+            VStack(alignment: .leading, spacing: 4) {
+                TextField("Filter, or a JSONPath query such as $..name", text: $query)
+                    .textFieldStyle(.roundedBorder)
+                    .accessibilityIdentifier("json-query-field")
+                searchStatus
+            }
+            .padding(8)
             if case .invalid(let error) = session.status, session.tree != nil {
                 StaleTreeBanner(error: error) { model.revealJSONError(error) }
             }
             content(for: session)
+            SchemaPanel(model: model)
         }
         .onChange(of: query) { updateFilter() }
         .onChange(of: session.version) { updateFilter() }
@@ -32,7 +38,7 @@ struct JSONTreePane: View {
             JSONTreeView(
                 root: tree,
                 version: session.version,
-                visiblePaths: visiblePaths,
+                visiblePaths: search.visiblePaths,
                 onSelect: { model.revealJSONValue(at: $0) }
             )
         } else if case .invalid(let error) = session.status {
@@ -49,8 +55,23 @@ struct JSONTreePane: View {
         }
     }
 
+    @ViewBuilder
+    private var searchStatus: some View {
+        if let error = search.error {
+            Text(error.localizedDescription)
+                .font(.caption)
+                .foregroundStyle(.red)
+                .accessibilityIdentifier("json-query-status")
+        } else if let count = search.matchCount {
+            Text(count == 1 ? "1 match" : "\(count) matches")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("json-query-status")
+        }
+    }
+
     private func updateFilter() {
-        visiblePaths = model.json.tree.flatMap { JSONTreeFilter.visiblePaths(in: $0.value, matching: query) }
+        search = model.json.tree.map { JSONTreeSearch.result(for: query, in: $0.value) } ?? .everything
     }
 }
 
