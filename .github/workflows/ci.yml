@@ -15,7 +15,8 @@ permissions:
   contents: read
 
 env:
-  # Same Xcode as local development; the app needs the macOS 26.5 SDK and runs on macOS 26.5+.
+  # Same Xcode as local development, so it builds with the macOS 26.5 SDK; the app itself
+  # deploys down to macOS 15 (MACOSX_DEPLOYMENT_TARGET), unrelated to this toolchain version.
   XCODE_APP: /Applications/Xcode_26.5.app
   MINIMUM_COVERAGE: "80"
   RESULT_BUNDLE: build/UnitTests.xcresult

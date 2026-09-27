@@ -4,7 +4,7 @@ A native macOS workbench for Markdown and JSON: open a folder, edit files in tab
 highlighting, preview Markdown live, and work with JSON with a validating editor, a tree view,
 schema checking, comparison and conversion tools.
 
-Requires macOS 26.5 or later.
+Requires macOS 15 (Sequoia) or later to run. Building it needs Xcode 26.5.
 
 ![Markdown editor with live preview](.github/screenshots/markdown-preview.png)
 

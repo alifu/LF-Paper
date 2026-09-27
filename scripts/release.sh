@@ -120,7 +120,7 @@ cask "lf-paper" do
   desc "Markdown and JSON workbench with live preview, validation and comparison"
   homepage "https://github.com/$REPOSITORY"
 
-  depends_on macos: :tahoe
+  depends_on macos: ">= :sequoia"
 
   app "LF-Paper.app"
 
