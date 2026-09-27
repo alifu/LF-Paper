@@ -97,6 +97,9 @@ struct WorkspaceView: View {
         .sheet(isPresented: isReviewingReplacements) {
             ReplacePreviewSheet(model: model)
         }
+        .sheet(item: $model.swiftModelGenerator) { session in
+            SwiftModelSheet(model: model, session: session)
+        }
         .focusedSceneValue(\.workspace, model)
         .task {
             WorkspaceRegistry.shared.register(model)

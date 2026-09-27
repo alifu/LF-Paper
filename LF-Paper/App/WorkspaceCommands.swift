@@ -217,6 +217,9 @@ struct WorkspaceCommands: Commands {
         Button("Convert to JSON") { workspace?.convertToJSON(indentation: indentation.indentation) }
             .disabled(workspace?.canConvertToJSON != true)
         Divider()
+        Button("Generate Swift Model…") { workspace?.showSwiftModelGenerator() }
+            .disabled(workspace?.canGenerateSwiftModel != true)
+        Divider()
         Button("Compare…") { openWindow(id: CompareView.windowID) }
             .keyboardShortcut("c", modifiers: [.command, .option])
     }

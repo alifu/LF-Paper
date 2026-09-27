@@ -38,6 +38,7 @@ struct EditorTheme {
         case .number: [.foregroundColor: NSColor.systemBlue]
         case .literal: [.foregroundColor: NSColor.systemPink]
         case .punctuation: [.foregroundColor: NSColor.tertiaryLabelColor]
+        case .keyword: [.font: boldFont, .foregroundColor: NSColor.systemPink]
         }
     }
 }

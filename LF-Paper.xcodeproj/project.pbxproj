@@ -274,10 +274,6 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		B7A15E0000000000000000B3 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			productRef = B7A15E0000000000000000B2 /* SwiftLintBuildToolPlugin */;
-		};
 		82C4A65430679A9B002E20BB /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 82C4A64430679A9A002E20BB /* LF-Paper */;
@@ -287,6 +283,10 @@
 			isa = PBXTargetDependency;
 			target = 82C4A64430679A9A002E20BB /* LF-Paper */;
 			targetProxy = 82C4A65D30679A9B002E20BB /* PBXContainerItemProxy */;
+		};
+		B7A15E0000000000000000B3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = B7A15E0000000000000000B2 /* SwiftLintBuildToolPlugin */;
 		};
 /* End PBXTargetDependency section */
 

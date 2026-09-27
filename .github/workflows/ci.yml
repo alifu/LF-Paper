@@ -34,6 +34,9 @@ jobs:
           xcodebuild -version
           sw_vers
 
+      - name: Check that generated Swift models compile
+        run: scripts/check-swift-models.sh
+
       - name: Cache Swift packages
         uses: actions/cache@v4
         with:

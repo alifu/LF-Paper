@@ -183,6 +183,21 @@ final class LF_PaperUITests: XCTestCase {
     }
 
     @MainActor
+    func testGeneratingASwiftModelOpensANewTab() throws {
+        openFile("data.json")
+        let tree = waitFor("json-tree")
+        waitUntil("the JSON is checked") { tree.outlineRows.count > 0 } // the menu item needs valid JSON
+        chooseMenuItem("Generate Swift Model…", inMenu: "JSON")
+
+        let preview = waitFor("swift-model-preview")
+        XCTAssertTrue(preview.exists)
+        waitFor("swift-model-open-button").click()
+
+        waitFor("tab-DataObject.swift") // "Data" would hide Foundation's type
+        waitUntil("the tab has the model") { self.editorText().contains("struct DataObject: Codable") }
+    }
+
+    @MainActor
     func testClosingAWindowWithUnsavedChangesAsksFirst() throws {
         openFile("README.md")
         let editor = waitFor("editor")

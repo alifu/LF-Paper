@@ -70,6 +70,8 @@ final class WorkspaceModel {
     let search = FolderSearchSession()
     /// Replace All over the search results.
     let replace = ReplaceSession()
+    /// The Generate Swift Model sheet, while it's open.
+    var swiftModelGenerator: SwiftModelSession?
     /// Where the editor and the Markdown preview scroll to follow each other.
     let scrollSync = ScrollSync()
     /// The headings of the Markdown file, for the Outline sidebar.
@@ -258,11 +260,13 @@ final class WorkspaceModel {
         document.map { closeTab($0.id) }
     }
 
-    /// Opens `text` in a new, unsaved tab named like `source` with another extension, next to it.
-    func openNewFile(_ text: String, fileExtension: String, nextTo source: URL) {
+    /// Opens `text` in a new, unsaved tab next to `source`, named `baseName` (or like `source`)
+    /// with another extension.
+    func openNewFile(_ text: String, fileExtension: String, nextTo source: URL, baseName: String? = nil) {
         let folder = source.deletingLastPathComponent()
         let taken = Set(children(of: folder).map(\.name) + tabs.filter { $0.url.deletingLastPathComponent().refersToSameFile(as: folder) }.map(\.url.lastPathComponent))
-        let name = FileNaming.uniqueName(base: source.deletingPathExtension().lastPathComponent, fileExtension: fileExtension, existing: taken)
+        let base = baseName ?? source.deletingPathExtension().lastPathComponent
+        let name = FileNaming.uniqueName(base: base, fileExtension: fileExtension, existing: taken)
         setScratchpadActive(false)
         openTabs = openTabs.opening(.newFile(at: folder.appending(path: name, directoryHint: .notDirectory), text: text))
         syncSelectionWithActiveTab() // so choosing the source file in the sidebar switches back to it

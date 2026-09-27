@@ -20,6 +20,8 @@ nonisolated enum TokenKind: Sendable, Hashable {
     case literal
     case punctuation
     case comment
+    /// A Swift keyword.
+    case keyword
 }
 
 nonisolated struct SyntaxToken: Equatable, Sendable {
@@ -63,6 +65,7 @@ enum SyntaxHighlighters {
         switch kind {
         case .markdown: MarkdownHighlighter()
         case .json: JSONHighlighter()
+        case .swift: SwiftHighlighter()
         case .yaml, .csv, .folder, nil: nil
         }
     }

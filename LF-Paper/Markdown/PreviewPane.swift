@@ -22,7 +22,7 @@ struct PreviewPane: View {
                 )
             case .json:
                 JSONTreePane(model: model)
-            case .yaml, .csv, .folder, nil:
+            case .yaml, .csv, .swift, .folder, nil:
                 ContentUnavailableView(
                     "No Preview",
                     systemImage: "eye.slash",

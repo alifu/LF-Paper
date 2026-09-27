@@ -13,11 +13,14 @@ nonisolated enum FileKind: Sendable, Equatable {
     /// Shown and edited as plain text; converts to and from JSON.
     case yaml
     case csv
+    /// Shown and edited as text with simple highlighting, such as a generated model.
+    case swift
 
     private static let markdownExtensions: Set<String> = ["md", "markdown", "mdown", "mkd"]
     private static let jsonExtensions: Set<String> = ["json"]
     private static let yamlExtensions: Set<String> = ["yaml", "yml"]
     private static let csvExtensions: Set<String> = ["csv"]
+    private static let swiftExtensions: Set<String> = ["swift"]
 
     /// The kind for a file with this extension, or `nil` if the workspace doesn't support it.
     init?(fileExtension: String) {
@@ -30,6 +33,8 @@ nonisolated enum FileKind: Sendable, Equatable {
             self = .yaml
         } else if Self.csvExtensions.contains(lowercased) {
             self = .csv
+        } else if Self.swiftExtensions.contains(lowercased) {
+            self = .swift
         } else {
             return nil
         }
@@ -43,6 +48,7 @@ nonisolated enum FileKind: Sendable, Equatable {
         case .json: "JSON file"
         case .yaml: "YAML file"
         case .csv: "CSV file"
+        case .swift: "Swift file"
         }
     }
 
@@ -53,6 +59,7 @@ nonisolated enum FileKind: Sendable, Equatable {
         case .json: "curlybraces"
         case .yaml: "list.bullet.indent"
         case .csv: "tablecells"
+        case .swift: "swift"
         }
     }
 }
