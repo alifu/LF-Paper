@@ -11,10 +11,23 @@ nonisolated struct SearchTarget: Sendable {
     let unsavedText: String?
 }
 
+/// Identifies a text, so Replace All can tell whether a file changed since it was searched.
+nonisolated struct TextFingerprint: Hashable, Sendable {
+    let length: Int
+    let hash: Int
+
+    init(_ text: String) {
+        length = text.utf16.count
+        hash = text.hashValue // stable within one run of the app, which is all it's used for
+    }
+}
+
 /// Every match in one file.
 nonisolated struct FileSearchResult: Equatable, Sendable, Identifiable {
     let file: IndexedFile
     let matches: [TextMatch]
+    /// The text that was searched.
+    let fingerprint: TextFingerprint
 
     var id: URL { file.url }
 }
@@ -50,10 +63,11 @@ nonisolated enum FolderSearch {
     ) -> FileSearchResult? {
         guard let text = target.unsavedText ?? readText(of: target.file.url, maximumSize: maximumFileSize) else { return nil }
         let matches = TextSearch.matches(of: expression, in: text, limit: matchesPerFileLimit)
-        return matches.isEmpty ? nil : FileSearchResult(file: target.file, matches: matches)
+        return matches.isEmpty ? nil : FileSearchResult(file: target.file, matches: matches, fingerprint: TextFingerprint(text))
     }
 
-    private static func readText(of url: URL, maximumSize: Int) -> String? {
+    /// The file's text, or `nil` when it's too large, unreadable or not text.
+    static func readText(of url: URL, maximumSize: Int = defaultMaximumFileSize) -> String? {
         let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
         guard size <= maximumSize,
               let text = try? String(contentsOf: url, encoding: .utf8),

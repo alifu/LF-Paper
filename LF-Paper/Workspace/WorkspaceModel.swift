@@ -68,6 +68,8 @@ final class WorkspaceModel {
     /// Changes whenever Search in Folder should take keyboard focus.
     private(set) var searchFocusRequest: UUID?
     let search = FolderSearchSession()
+    /// Replace All over the search results.
+    let replace = ReplaceSession()
     /// Where the editor and the Markdown preview scroll to follow each other.
     let scrollSync = ScrollSync()
     /// The headings of the Markdown file, for the Outline sidebar.
@@ -296,6 +298,12 @@ final class WorkspaceModel {
 
     func updateDocumentText(_ text: String) {
         guard let document else { return }
+        updateText(ofTab: document.id, to: text)
+    }
+
+    /// Edits any tab's text, as typing in it would (Replace All edits tabs that aren't showing).
+    func updateText(ofTab id: UUID, to text: String) {
+        guard let document = openTabs.document(withID: id) else { return }
         openTabs = openTabs.replacing(document.editing(text))
         autosave.schedule { [weak self] in self?.autosaveEditedTabs() }
     }
@@ -373,6 +381,7 @@ final class WorkspaceModel {
         fileIndex = []
         recentFiles = []
         search.reset()
+        replace.reset()
         refreshFileIndex()
         remember(url)
         startWatching(url)

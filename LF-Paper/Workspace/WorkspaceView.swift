@@ -91,6 +91,12 @@ struct WorkspaceView: View {
         .onChange(of: model.searchFocusRequest) {
             columnVisibility = .all // Find in Folder needs the sidebar
         }
+        .onChange(of: model.replace.focusRequest) {
+            columnVisibility = .all // and so does Replace
+        }
+        .sheet(isPresented: isReviewingReplacements) {
+            ReplacePreviewSheet(model: model)
+        }
         .focusedSceneValue(\.workspace, model)
         .task {
             WorkspaceRegistry.shared.register(model)
@@ -149,6 +155,15 @@ struct WorkspaceView: View {
             get: { model.presentedError != nil },
             set: { isPresented in
                 if !isPresented { model.presentedError = nil }
+            }
+        )
+    }
+
+    private var isReviewingReplacements: Binding<Bool> {
+        Binding(
+            get: { model.replace.plan != nil },
+            set: { isPresented in
+                if !isPresented { model.replace.cancel() }
             }
         )
     }

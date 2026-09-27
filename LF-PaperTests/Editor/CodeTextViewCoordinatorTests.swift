@@ -329,6 +329,33 @@ final class CodeTextViewCoordinatorTests {
         #expect(textView.string == "old")
     }
 
+    /// Replace All edits tabs that aren't showing; back in the tab, ⌘Z brings the old text back.
+    @Test func changesMadeWhileAnotherTabShowedCanBeUndone() throws {
+        let background = UUID()
+        coordinator.update(text: "cat", documentID: background, fileKind: nil)
+        // The test host's run loop never ends the automatic undo groups, so each action gets its own.
+        let undoManager = try #require(coordinator.undoManager(for: textView))
+        undoManager.groupsByEvent = false
+        inUndoGroup(undoManager) { type(" and more") }
+        coordinator.update(text: "other", documentID: UUID(), fileKind: nil)
+
+        inUndoGroup(undoManager) { coordinator.update(text: "dog and more", documentID: background, fileKind: nil) }
+
+        #expect(coordinator.undoManager(for: textView) === undoManager)
+        #expect(textView.string == "dog and more")
+        #expect(reportedTexts == ["cat and more"]) // the replacement came from the model; not reported back
+        undoManager.undo()
+        #expect(textView.string == "cat and more")
+        undoManager.undo()
+        #expect(textView.string == "cat") // the typing before it is still there too
+    }
+
+    private func inUndoGroup(_ undoManager: UndoManager, _ action: () -> Void) {
+        undoManager.beginUndoGrouping()
+        action()
+        undoManager.endUndoGrouping()
+    }
+
     // MARK: Revealing
 
     @Test func revealRequestSelectsTheRange() {

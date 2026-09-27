@@ -10,18 +10,19 @@ import XCTest
 
 /// The main flows, end to end. The app opens a fresh folder of sample files
 /// (README.md, data.json, other.json) when launched with `-UITestFixture YES`.
+@MainActor
 final class LF_PaperUITests: XCTestCase {
     private static let timeout: TimeInterval = 10
     private var app: XCUIApplication!
 
-    override func setUpWithError() throws {
+    override func setUp() async throws {
         continueAfterFailure = false
         app = XCUIApplication()
         app.launchArguments = ["-UITestFixture", "YES", "-ApplePersistenceIgnoreState", "YES"]
         app.launch()
     }
 
-    override func tearDownWithError() throws {
+    override func tearDown() async throws {
         app.terminate()
     }
 
@@ -153,6 +154,32 @@ final class LF_PaperUITests: XCTestCase {
 
         app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Line 1:'")).firstMatch.click()
         waitFor("tab-other.json")
+    }
+
+    @MainActor
+    func testReplaceInFolderPreviewsThenWrites() throws {
+        waitFor("file-README.md")
+        app.typeKey("f", modifierFlags: [.command, .shift])
+        let field = waitFor("folder-search-field")
+        field.typeText("math")
+        field.typeKey(.return, modifierFlags: [])
+        let summary = waitFor("folder-search-summary")
+        waitUntil("the search finds both files") { (summary.value as? String ?? summary.label) == "2 matches in 2 files" }
+
+        app.typeKey("f", modifierFlags: [.command, .option, .shift]) // Replace in Folder
+        let replaceField = waitFor("folder-replace-field")
+        replaceField.typeText("algebra")
+        replaceField.typeKey(.return, modifierFlags: [])
+
+        let preview = waitFor("replace-preview-summary")
+        XCTAssertEqual(preview.value as? String ?? preview.label, "2 replacements in 2 files")
+        waitFor("replace-confirm-button").click()
+
+        let outcome = waitFor("replace-outcome")
+        waitUntil("the files are written") { (outcome.value as? String ?? outcome.label) == "Replaced 2 matches in 2 files." }
+        app.radioButtons["Files"].click() // the file tree isn't shown in Search mode
+        openFile("data.json")
+        waitUntil("the file has the new text") { self.editorText().contains("algebra") }
     }
 
     @MainActor

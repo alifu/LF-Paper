@@ -40,6 +40,14 @@ struct WorkspaceCommands: Commands {
             Button("Find in Folder…") { workspace?.showFolderSearch() }
                 .keyboardShortcut("f", modifiers: [.command, .shift])
                 .disabled(workspace?.rootURL == nil)
+            Button("Replace in Folder…") { workspace?.showFolderReplace() }
+                .keyboardShortcut("f", modifiers: [.command, .option, .shift])
+                .disabled(workspace?.rootURL == nil)
+        }
+        CommandGroup(after: .undoRedo) {
+            // Tabs edited by Replace All undo with their own ⌘Z; this puts back the files it wrote.
+            Button("Undo Replace All") { workspace?.undoReplaceAll() }
+                .disabled(workspace?.replace.canUndo != true)
         }
         CommandGroup(replacing: .saveItem) {
             Button(workspace?.document == nil ? "Close" : "Close Tab") { close() }

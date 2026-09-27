@@ -61,11 +61,13 @@ extension WorkspaceModel {
         reveal(match.range, focusesEditor: true)
     }
 
+    /// The text of every open tab (edited or not) by standardized URL: what search and replace see.
+    func openTextsByURL() -> [URL: String] {
+        Dictionary(tabs.map { ($0.url.standardizedFileURL, $0.text) }, uniquingKeysWith: { first, _ in first })
+    }
+
     private func searchTargets() -> [SearchTarget] {
-        let openTexts = Dictionary(
-            tabs.map { ($0.url.standardizedFileURL, $0.text) },
-            uniquingKeysWith: { first, _ in first }
-        )
+        let openTexts = openTextsByURL()
         return fileIndex.map { SearchTarget(file: $0, unsavedText: openTexts[$0.url.standardizedFileURL]) }
     }
 }

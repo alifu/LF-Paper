@@ -34,6 +34,34 @@ struct FolderSearchViewRenderingTests {
         #expect(content > blank + 150, "results should be visible (blank: \(blank), view: \(content))")
     }
 
+    @Test(arguments: [NSAppearance.Name.darkAqua, .aqua])
+    func showsTheReplaceFieldAndWhatReplaceAllDid(appearance: NSAppearance.Name) async throws {
+        let workspace = try TestWorkspace(files: [
+            "README.md": "The needle is here.",
+            "notes.md": "needle",
+        ])
+        let model = workspace.model
+        model.search.text = "needle"
+        model.runFolderSearch()
+        await model.search.task?.value
+        model.showFolderReplace()
+        model.replace.replacement = "thread"
+        model.prepareReplaceAll()
+        await model.replace.task?.value
+        try "changed".write(to: workspace.folder.url.appending(path: "notes.md"), atomically: true, encoding: .utf8)
+        model.applyReplaceAll()
+        await model.search.task?.value
+        #expect(model.replace.outcome?.skipped.count == 1)
+
+        let view = FolderSearchView(model: model).background(Color(nsColor: .windowBackgroundColor))
+        let bitmap = try OffscreenRenderer.render(view, size: Self.size, appearance: appearance)
+        try OffscreenRenderer.attach(bitmap, named: "folder-replace-\(appearance.rawValue).png")
+
+        let content = OffscreenRenderer.contentPixels(in: bitmap, appearance: appearance)
+        let blank = try OffscreenRenderer.blankContentPixels(size: Self.size, appearance: appearance)
+        #expect(content > blank + 150, "the Replace field and outcome should be visible (blank: \(blank), view: \(content))")
+    }
+
     @Test func summaryCountsMatchesAndFiles() {
         #expect(FolderSearchView.summary(matches: 0, files: 0, searched: "x", isTruncated: false) == "No results for “x”")
         #expect(FolderSearchView.summary(matches: 1, files: 1, searched: "x", isTruncated: false) == "1 match in 1 file")

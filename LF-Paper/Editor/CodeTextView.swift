@@ -117,6 +117,8 @@ extension CodeTextView {
         private struct DocumentState {
             let undoManager: UndoManager
             let selectedRange: NSRange
+            /// The text when the document was hidden; its undo history ends there.
+            let text: String
         }
 
         var onTextChange: @MainActor (String) -> Void
@@ -180,7 +182,7 @@ extension CodeTextView {
             let isNewKind = fileKind != self.fileKind
             let isNewFontSize = fontSize != theme.font.pointSize
             if isNewDocument, let previousID = self.documentID {
-                savedStates[previousID] = DocumentState(undoManager: undoManager, selectedRange: textView.selectedRange())
+                savedStates[previousID] = DocumentState(undoManager: undoManager, selectedRange: textView.selectedRange(), text: textView.string)
             }
             if let openDocumentIDs {
                 savedStates = savedStates.filter { openDocumentIDs.contains($0.key) }
@@ -291,12 +293,20 @@ extension CodeTextView {
             textView.sizeToFit()
         }
 
+        /// Shows a document. If its text changed while it was hidden (Replace All), the change is
+        /// applied on top of its restored history, so Undo still works in that tab.
         private func show(_ text: String, restoring state: DocumentState?, in textView: NSTextView) {
-            replaceText(in: textView, with: text)
+            let restoredText = state?.text ?? text
+            replaceText(in: textView, with: restoredText)
             undoManager = state?.undoManager ?? UndoManager()
-            let selection = Self.clamped(state?.selectedRange ?? NSRange(location: 0, length: 0), toLength: (text as NSString).length)
+            let selection = Self.clamped(state?.selectedRange ?? NSRange(location: 0, length: 0), toLength: (restoredText as NSString).length)
             textView.setSelectedRange(selection)
-            textView.scrollRangeToVisible(selection)
+            if restoredText != text {
+                textView.breakUndoCoalescing() // its own undo step, not merged with the last typing
+                applyUndoableEdit(in: textView, replacingAllWith: text)
+                textView.setSelectedRange(Self.clamped(selection, toLength: (text as NSString).length))
+            }
+            textView.scrollRangeToVisible(textView.selectedRange())
         }
 
         private func applyUndoableEdit(in textView: NSTextView, replacingAllWith text: String) {

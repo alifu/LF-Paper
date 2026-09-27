@@ -17,14 +17,17 @@ final class FolderSearchSession {
     private(set) var results: [FileSearchResult] = []
     private(set) var isSearching = false
     private(set) var error: SearchQueryError?
-    /// The text of the last search that ran, for the "No results for …" message.
-    private(set) var searchedText: String?
+    /// The last search that ran: its text is shown in "No results for …", and Replace All uses it.
+    private(set) var searchedQuery: SearchQuery?
     /// The search stopped at `totalMatchLimit`.
     private(set) var isTruncated = false
     /// The search in progress; tests await it.
     @ObservationIgnored private(set) var task: Task<Void, Never>?
     /// Only the latest search may change the state; a cancelled one can still be finishing.
     @ObservationIgnored private var currentSearchID: UUID?
+
+    /// The text of the last search that ran.
+    var searchedText: String? { searchedQuery?.text }
 
     var matchCount: Int { results.reduce(0) { $0 + $1.matches.count } }
 
@@ -40,7 +43,7 @@ final class FolderSearchSession {
             return
         }
         clearResults()
-        searchedText = query.text
+        searchedQuery = query
         isSearching = true
         let searchID = UUID()
         currentSearchID = searchID
@@ -74,7 +77,7 @@ final class FolderSearchSession {
     private func clearResults() {
         results = []
         error = nil
-        searchedText = nil
+        searchedQuery = nil
         isTruncated = false
     }
 }

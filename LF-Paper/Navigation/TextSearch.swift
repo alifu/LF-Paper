@@ -75,7 +75,8 @@ nonisolated enum TextSearch {
         return matches
     }
 
-    private static func match(at range: NSRange, in string: NSString, lines: LineIndex) -> TextMatch {
+    /// The match at `range`, with its line number and preview.
+    static func match(at range: NSRange, in string: NSString, lines: LineIndex) -> TextMatch {
         let lineNumber = lines.lineNumber(at: range.location)
         let lineRange = string.lineRange(for: NSRange(location: range.location, length: 0))
         var start = lineRange.location
