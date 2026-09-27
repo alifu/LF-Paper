@@ -94,6 +94,9 @@ struct WorkspaceView: View {
         .onChange(of: model.replace.focusRequest) {
             columnVisibility = .all // and so does Replace
         }
+        .onChange(of: model.sidebarRevealRequest) {
+            columnVisibility = .all // the path bar showed a folder or file in it
+        }
         .sheet(isPresented: isReviewingReplacements) {
             ReplacePreviewSheet(model: model)
         }

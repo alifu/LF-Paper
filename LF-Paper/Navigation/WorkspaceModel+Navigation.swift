@@ -22,7 +22,7 @@ extension WorkspaceModel {
 
     /// Expands the folders above `url`, loading them as needed, and returns the tree's URL for the file.
     /// Returns `nil` when the file is outside the folder or no longer listed.
-    private func revealInTree(_ url: URL) -> URL? {
+    func revealInTree(_ url: URL) -> URL? {
         guard let rootURL, let components = url.components(below: rootURL) else { return nil }
 
         var folder = rootURL

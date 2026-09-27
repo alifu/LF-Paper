@@ -72,6 +72,10 @@ struct EditorPane: View {
 
     @ViewBuilder
     private var documentBars: some View {
+        if model.document != nil {
+            PathBar(model: model)
+            Divider()
+        }
         if let document = model.document, model.isDocumentMissingOnDisk {
             MissingFileBanner(fileName: document.url.lastPathComponent) {
                 _ = model.save()

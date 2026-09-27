@@ -109,12 +109,20 @@ final class LineNumberRulerView: NSRulerView {
         label.draw(at: origin, withAttributes: labelAttributes)
     }
 
+    /// Crossing a digit width (999 → 1000 lines, or back) changes how wide the gutter needs to be.
     private func updateThickness() {
         let digits = max(Self.minimumDigits, String(lineIndex.lineCount).count)
         let digitWidth = ("8" as NSString).size(withAttributes: labelAttributes).width
         let thickness = ceil(CGFloat(digits) * digitWidth + 2 * Self.horizontalPadding)
-        if ruleThickness != thickness {
-            ruleThickness = thickness
+        guard ruleThickness != thickness else { return }
+        // Setting ruleThickness re-tiles the whole scroll view synchronously, which can ask the
+        // text view to size itself, reaching into the layout manager. `textDidChange()` (this
+        // method's usual caller) runs from inside NSTextStorage's own edit notification, while a
+        // text replacement is still in progress; reentering layout then found the layout manager
+        // still holding stale state for the text's old (often much longer) length and crashed
+        // with an out-of-bounds range. One run-loop turn later, the edit has settled.
+        DispatchQueue.main.async { [weak self] in
+            self?.ruleThickness = thickness
         }
     }
 

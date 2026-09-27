@@ -67,6 +67,8 @@ final class WorkspaceModel {
     var sidebarMode: SidebarMode = .files
     /// Changes whenever Search in Folder should take keyboard focus.
     private(set) var searchFocusRequest: UUID?
+    /// Changes whenever the sidebar should be shown (the path bar showed an item in it).
+    private(set) var sidebarRevealRequest: UUID?
     let search = FolderSearchSession()
     /// Replace All over the search results.
     let replace = ReplaceSession()
@@ -270,6 +272,11 @@ final class WorkspaceModel {
         setScratchpadActive(false)
         openTabs = openTabs.opening(.newFile(at: folder.appending(path: name, directoryHint: .notDirectory), text: text))
         syncSelectionWithActiveTab() // so choosing the source file in the sidebar switches back to it
+    }
+
+    /// Asks the window to show the sidebar if it's hidden.
+    func requestSidebar() {
+        sidebarRevealRequest = UUID()
     }
 
     /// Edit › Find in Folder (⇧⌘F): shows the search in the sidebar and focuses its field.

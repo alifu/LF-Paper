@@ -1,78 +1,65 @@
 # LF-Paper
 
-A native macOS workbench for Markdown and JSON: open a folder, edit files in tabs with syntax highlighting,
-preview Markdown live, validate and format JSON, browse it as a tree, and compare two JSON documents.
-It also has a scratchpad for throwaway text, like a prompt you're about to paste into an AI agent.
+A native macOS workbench for Markdown and JSON: open a folder, edit files in tabs with syntax
+highlighting, preview Markdown live, and work with JSON with a validating editor, a tree view,
+schema checking, comparison and conversion tools.
 
 Requires macOS 26.5 or later.
 
-## Install
+![Markdown editor with live preview](.github/screenshots/markdown-preview.png)
 
-With [Homebrew](https://brew.sh):
+![JSON editor with tree view](.github/screenshots/json-tools.png)
 
-```bash
-brew install --cask alifu/tap/lf-paper
-```
+## Features
 
-Then open it from Applications, or run:
+**Folder workspace**
+- Open a folder and browse its file tree: create, rename, move to the Trash, and reveal in Finder.
+- Files open in tabs, each with its own undo history; unsaved changes are marked and asked about
+  before closing. Autosave a moment after you stop typing, if you turn it on.
+- Quick Open (⌘P) jumps to any file by name; Find in Folder (⇧⌘F) and Replace in Folder (⌥⇧⌘F)
+  search every file, with a preview and an undo for the replacement.
+- A path bar above the editor shows where the open file lives; click a part of it to reveal that
+  folder or file in the sidebar.
+- A scratchpad tab for throwaway text, such as a prompt you're about to paste elsewhere. It's
+  never saved or counted as an unsaved change.
 
-```bash
-open -a LF-Paper
-```
+**Markdown**
+- Syntax highlighting for headings, emphasis, links, quotes, lists and fenced code.
+- A live preview beside the editor, with scrolling kept in sync between the two, and an outline
+  sidebar listing the file's headings.
+- Export to HTML or PDF.
 
-### "Apple cannot check it for malicious software"
+**JSON**
+- Validation with the exact error position, plus Format and Minify.
+- A tree view of the document that you can expand, collapse and search; searches starting with
+  `$` are JSONPath queries.
+- Schema validation against a `$schema` reference or a file you choose, with each problem linked
+  back to its place in the document.
+- Convert to YAML or CSV, or back to JSON.
+- Generate Swift models from a JSON document — Codable structs, classes, or dictionary-based
+  models reading `[String: Any]` — with a live preview of the generated code before it's saved.
 
-LF-Paper isn't notarized by Apple, so macOS asks before the first launch:
+**Comparing files**
+- Compare any two JSON or text documents, or a file with the version last saved or the version in
+  the last Git commit, with a side-by-side or unified diff.
 
-1. Open **System Settings** → **Privacy & Security**.
-2. Next to the message about LF-Paper, click **Open Anyway**.
-3. Confirm with **Open**.
-
-macOS remembers this, so it only happens once per version.
-
-### Manual installation
-
-Download `LF-Paper.zip` from the [latest release](https://github.com/alifu/LF-Paper/releases/latest),
-unzip it and move `LF-Paper.app` to Applications.
-
-## Update
-
-```bash
-brew upgrade --cask lf-paper
-```
-
-## Uninstall
-
-```bash
-brew uninstall --cask lf-paper
-```
-
-To also remove its settings and data:
-
-```bash
-brew uninstall --zap --cask lf-paper
-```
+**Editor**
+- A choice of editor theme: the system's colours (light and dark), or Hyrule / Hyrule Light from
+  [Rainglow](https://rainglow.io).
+- Large files and very long lines are handled without slowing down typing.
 
 ## Development
 
-Open `LF-Paper.xcodeproj` in Xcode 26.5 and run the `LF-Paper` scheme.
+Clone the repository and open `LF-Paper.xcodeproj` in Xcode 26.5, then run the `LF-Paper` scheme.
 
-Unit tests (the UI tests take over the mouse and keyboard, so run those by hand):
+Unit tests (the UI tests take over the mouse and keyboard, so run those by hand from Xcode):
 
 ```bash
 xcodebuild test -project LF-Paper.xcodeproj -scheme LF-Paper -destination 'platform=macOS' -only-testing:LF-PaperTests -skipPackagePluginValidation
 ```
 
-SwiftLint runs as a build plugin (only the file-length rule, 800 lines). Xcode asks once to trust it;
-command-line builds need `-skipPackagePluginValidation`, as above.
-
-### Releasing
-
-1. Raise `MARKETING_VERSION` (Homebrew only sees a new version number).
-2. Run `scripts/release.sh`. It builds `build/release/LF-Paper.zip` and writes the matching cask to
-   `build/release/lf-paper.rb`. With `TEAM_ID=…` it signs with Developer ID and notarizes instead.
-3. Create a GitHub release tagged with the version (for example `1.0`) and attach `LF-Paper.zip`.
-4. Copy `lf-paper.rb` to `Casks/lf-paper.rb` in [alifu/homebrew-tap](https://github.com/alifu/homebrew-tap) and push.
+SwiftLint runs as a build plugin (only the file-length rule, 800 lines). Xcode asks once to trust
+it; command-line builds need `-skipPackagePluginValidation`, as above.
 
 ## Credits
 

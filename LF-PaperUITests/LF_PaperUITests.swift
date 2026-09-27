@@ -198,6 +198,19 @@ final class LF_PaperUITests: XCTestCase {
     }
 
     @MainActor
+    func testPathBarShowsTheFileAndRevealsItInTheSidebar() throws {
+        openFile("README.md")
+        let bar = waitFor("path-bar")
+        XCTAssertTrue(bar.label.hasSuffix("README.md"), "the bar reads \(bar.label)")
+
+        app.typeKey("f", modifierFlags: [.command, .shift]) // the sidebar shows Search
+        waitFor("folder-search-field")
+        waitFor("path-segment-README.md").click()
+
+        waitFor("file-README.md") // back in Files, with the file listed
+    }
+
+    @MainActor
     func testClosingAWindowWithUnsavedChangesAsksFirst() throws {
         openFile("README.md")
         let editor = waitFor("editor")
