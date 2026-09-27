@@ -60,8 +60,11 @@ Open `LF-Paper.xcodeproj` in Xcode 26.5 and run the `LF-Paper` scheme.
 Unit tests (the UI tests take over the mouse and keyboard, so run those by hand):
 
 ```bash
-xcodebuild test -project LF-Paper.xcodeproj -scheme LF-Paper -destination 'platform=macOS' -only-testing:LF-PaperTests
+xcodebuild test -project LF-Paper.xcodeproj -scheme LF-Paper -destination 'platform=macOS' -only-testing:LF-PaperTests -skipPackagePluginValidation
 ```
+
+SwiftLint runs as a build plugin (only the file-length rule, 800 lines). Xcode asks once to trust it;
+command-line builds need `-skipPackagePluginValidation`, as above.
 
 ### Releasing
 
@@ -70,3 +73,9 @@ xcodebuild test -project LF-Paper.xcodeproj -scheme LF-Paper -destination 'platf
    `build/release/lf-paper.rb`. With `TEAM_ID=…` it signs with Developer ID and notarizes instead.
 3. Create a GitHub release tagged with the version (for example `1.0`) and attach `LF-Paper.zip`.
 4. Copy `lf-paper.rb` to `Casks/lf-paper.rb` in [alifu/homebrew-tap](https://github.com/alifu/homebrew-tap) and push.
+
+## Credits
+
+- **Hyrule** and **Hyrule Light** editor themes from [Rainglow](https://rainglow.io) by Dayle Rees (MIT License).
+- [swift-cmark](https://github.com/swiftlang/swift-cmark) for Markdown (BSD 2-Clause License).
+- [Yams](https://github.com/jpsim/Yams) for YAML (MIT License).

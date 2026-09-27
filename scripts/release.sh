@@ -54,6 +54,7 @@ if [[ -n "$TEAM_ID" ]]; then
     -configuration Release \
     -destination 'generic/platform=macOS' \
     -archivePath "$ARCHIVE" \
+    -skipPackagePluginValidation \
     DEVELOPMENT_TEAM="$TEAM_ID" \
     CODE_SIGN_STYLE=Automatic
 
@@ -81,6 +82,7 @@ else
     -configuration Release \
     -destination 'generic/platform=macOS' \
     -archivePath "$ARCHIVE" \
+    -skipPackagePluginValidation \
     CODE_SIGN_IDENTITY=- \
     CODE_SIGN_STYLE=Manual \
     DEVELOPMENT_TEAM=

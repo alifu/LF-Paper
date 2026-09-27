@@ -356,6 +356,66 @@ final class CodeTextViewCoordinatorTests {
         undoManager.endUndoGrouping()
     }
 
+    // MARK: Themes
+
+    private func color(at location: Int) -> NSColor? {
+        textView.textStorage?.attribute(.foregroundColor, at: location, effectiveRange: nil) as? NSColor
+    }
+
+    private func font(at location: Int) -> NSFont? {
+        textView.textStorage?.attribute(.font, at: location, effectiveRange: nil) as? NSFont
+    }
+
+    @Test func tokensGetTheThemesColoursAndFonts() throws {
+        let palette = EditorPalette.hyruleDark
+        coordinator.update(text: "# Title\n*it* `code` plain", documentID: UUID(), fileKind: .markdown, palette: palette)
+
+        #expect(color(at: 2) == palette.style(for: .heading).color)
+        #expect(try #require(font(at: 2)).fontDescriptor.symbolicTraits.contains(.bold))
+        #expect(color(at: 9) == palette.style(for: .emphasis).color)
+        #expect(try #require(font(at: 9)).fontDescriptor.symbolicTraits.contains(.italic))
+        #expect(color(at: 14) == palette.style(for: .code).color)
+        #expect(color(at: 22) == palette.text)
+        #expect(textView.typingAttributes[.foregroundColor] as? NSColor == palette.text)
+    }
+
+    @Test func theEditorsColoursFollowTheTheme() {
+        coordinator.update(text: "a", documentID: UUID(), fileKind: nil, palette: .hyruleLight)
+
+        #expect(textView.backgroundColor == EditorPalette.hyruleLight.background)
+        #expect(textView.insertionPointColor == EditorPalette.hyruleLight.cursor)
+        #expect(textView.selectedTextAttributes[.backgroundColor] as? NSColor == EditorPalette.hyruleLight.selection)
+        #expect((textView as? CodeEditorTextView)?.currentLineColor == EditorPalette.hyruleLight.currentLine)
+        #expect(scrollView.backgroundColor == EditorPalette.hyruleLight.background)
+    }
+
+    @Test func switchingThemesRestylesOpenTextAndTheGutter() throws {
+        let id = UUID()
+        coordinator.update(text: #"{"a": 1}"#, documentID: id, fileKind: .json, palette: .system)
+        let ruler = try #require(scrollView.verticalRulerView as? LineNumberRulerView)
+        #expect(color(at: 6) == EditorPalette.system.style(for: .number).color)
+        #expect(ruler.labelColor == EditorPalette.system.gutterText)
+
+        coordinator.update(text: #"{"a": 1}"#, documentID: id, fileKind: .json, palette: .hyruleDark)
+
+        #expect(color(at: 6) == EditorPalette.hyruleDark.style(for: .number).color)
+        #expect(color(at: 1) == EditorPalette.hyruleDark.style(for: .key).color)
+        #expect(ruler.labelColor == EditorPalette.hyruleDark.gutterText)
+        #expect(ruler.gutterBackground == EditorPalette.hyruleDark.background)
+        #expect(textView.backgroundColor == EditorPalette.hyruleDark.background)
+    }
+
+    @Test func switchingThemesKeepsTheUndoHistory() throws {
+        let id = UUID()
+        coordinator.update(text: "a", documentID: id, fileKind: nil)
+        let undoManager = coordinator.undoManager(for: textView)
+
+        coordinator.update(text: "a", documentID: id, fileKind: nil, palette: .hyruleDark)
+
+        #expect(coordinator.undoManager(for: textView) === undoManager)
+        #expect(reportedTexts.isEmpty)
+    }
+
     // MARK: Revealing
 
     @Test func revealRequestSelectsTheRange() {

@@ -5,40 +5,38 @@
 
 import AppKit
 
-/// Fonts and colors for the code editor. All colors are system colors, so they adapt to dark mode.
+/// Fonts and colours for the code editor: a font size and an `EditorPalette`.
 struct EditorTheme {
     static let defaultFontSize = CGFloat(AppSettings.defaultFontSize)
     static let standard = EditorTheme(fontSize: defaultFontSize)
 
     let font: NSFont
+    let palette: EditorPalette
     private let boldFont: NSFont
     private let italicFont: NSFont
 
-    init(fontSize: CGFloat) {
+    init(fontSize: CGFloat, palette: EditorPalette = .system) {
         font = .monospacedSystemFont(ofSize: fontSize, weight: .regular)
         boldFont = .monospacedSystemFont(ofSize: fontSize, weight: .bold)
         italicFont = NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask)
+        self.palette = palette
     }
 
     var baseAttributes: [NSAttributedString.Key: Any] {
-        [.font: font, .foregroundColor: NSColor.textColor]
+        [.font: font, .foregroundColor: palette.text]
     }
 
     func attributes(for kind: TokenKind) -> [NSAttributedString.Key: Any] {
-        switch kind {
-        case .heading: [.font: boldFont, .foregroundColor: NSColor.systemBlue]
-        case .strong: [.font: boldFont]
-        case .emphasis: [.font: italicFont]
-        case .code: [.foregroundColor: NSColor.systemPink]
-        case .link: [.foregroundColor: NSColor.linkColor]
-        case .quote, .comment: [.foregroundColor: NSColor.secondaryLabelColor]
-        case .listMarker: [.foregroundColor: NSColor.systemOrange]
-        case .key: [.foregroundColor: NSColor.systemPurple]
-        case .string: [.foregroundColor: NSColor.systemRed]
-        case .number: [.foregroundColor: NSColor.systemBlue]
-        case .literal: [.foregroundColor: NSColor.systemPink]
-        case .punctuation: [.foregroundColor: NSColor.tertiaryLabelColor]
-        case .keyword: [.font: boldFont, .foregroundColor: NSColor.systemPink]
+        let style = palette.style(for: kind)
+        var attributes: [NSAttributedString.Key: Any] = [:]
+        switch style.trait {
+        case .regular: break
+        case .bold: attributes[.font] = boldFont
+        case .italic: attributes[.font] = italicFont
         }
+        if let color = style.color {
+            attributes[.foregroundColor] = color
+        }
+        return attributes
     }
 }

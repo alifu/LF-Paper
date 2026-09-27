@@ -11,7 +11,12 @@ final class LineNumberRulerView: NSRulerView {
     private static let horizontalPadding: CGFloat = 8
     private static let minimumDigits = 3
 
-    private var labelAttributes = LineNumberRulerView.labelAttributes(fontSize: 11)
+    private var labelFontSize: CGFloat = 11
+    /// The numbers' colour; the editor sets it from its palette.
+    private(set) var labelColor: NSColor = EditorPalette.system.gutterText
+    /// Matches the editor's background.
+    private(set) var gutterBackground: NSColor = EditorPalette.system.background
+    private var labelAttributes = LineNumberRulerView.labelAttributes(fontSize: 11, color: EditorPalette.system.gutterText)
     private weak var textView: NSTextView?
     private var lineIndex = LineIndex(text: "")
 
@@ -36,15 +41,24 @@ final class LineNumberRulerView: NSRulerView {
 
     /// Line numbers are drawn a little smaller than the editor text.
     func matchEditorFontSize(_ editorFontSize: CGFloat) {
-        labelAttributes = Self.labelAttributes(fontSize: max(editorFontSize - 2, 9))
+        labelFontSize = max(editorFontSize - 2, 9)
+        labelAttributes = Self.labelAttributes(fontSize: labelFontSize, color: labelColor)
         updateThickness()
         needsDisplay = true
     }
 
-    private static func labelAttributes(fontSize: CGFloat) -> [NSAttributedString.Key: Any] {
+    /// The gutter takes the editor's background and the palette's number colour.
+    func apply(_ palette: EditorPalette) {
+        labelColor = palette.gutterText
+        gutterBackground = palette.background
+        labelAttributes = Self.labelAttributes(fontSize: labelFontSize, color: labelColor)
+        needsDisplay = true
+    }
+
+    private static func labelAttributes(fontSize: CGFloat, color: NSColor) -> [NSAttributedString.Key: Any] {
         [
             .font: NSFont.monospacedDigitSystemFont(ofSize: fontSize, weight: .regular),
-            .foregroundColor: NSColor.secondaryLabelColor,
+            .foregroundColor: color,
         ]
     }
 
@@ -62,7 +76,7 @@ final class LineNumberRulerView: NSRulerView {
               let textContainer = textView.textContainer
         else { return }
 
-        NSColor.textBackgroundColor.setFill()
+        gutterBackground.setFill()
         bounds.intersection(rect).fill()
 
         let visibleGlyphs = layoutManager.glyphRange(forBoundingRect: textView.visibleRect, in: textContainer)

@@ -14,6 +14,7 @@ nonisolated enum AppSettings {
         static let autosaves = "settings.autosaves"
         static let unsavedChangesOnClose = "settings.unsavedChangesOnClose"
         static let wrapsLines = "settings.wrapsLines"
+        static let editorTheme = "settings.editorTheme"
     }
 
     enum Zoom {

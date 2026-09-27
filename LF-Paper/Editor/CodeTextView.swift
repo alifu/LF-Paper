@@ -14,6 +14,8 @@ struct CodeTextView: NSViewRepresentable {
     let documentID: UUID
     let fileKind: FileKind?
     var fontSize: CGFloat = EditorTheme.defaultFontSize
+    /// The colours; the caller picks the variant for the current appearance.
+    var palette: EditorPalette = .system
     /// Documents still open in tabs; the undo histories of all others are dropped.
     var openDocumentIDs: Set<UUID>? = nil
     /// Wrap long lines at the editor's width, or let them run on and scroll sideways.
@@ -53,6 +55,7 @@ struct CodeTextView: NSViewRepresentable {
             fileKind: fileKind,
             revealRequest: revealRequest,
             fontSize: fontSize,
+            palette: palette,
             openDocumentIDs: openDocumentIDs,
             wrapsLines: wrapsLines,
             scrollRequest: scrollRequest
@@ -77,7 +80,7 @@ struct CodeTextView: NSViewRepresentable {
     }
 
     private static func makeTextView() -> NSTextView {
-        let textView = NSTextView(usingTextLayoutManager: false)
+        let textView = CodeEditorTextView(usingTextLayoutManager: false)
         textView.autoresizingMask = [.width]
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
@@ -134,6 +137,8 @@ extension CodeTextView {
         private var isReplacingText = false
         private var lastRevealID: UUID?
         private var theme = EditorTheme.standard
+        /// The first update applies the palette's colours even when it's the default one.
+        private var hasAppliedPalette = false
         /// `nil` until the first update, so the first one always applies the setting.
         private var wrapsLines: Bool?
         private var lastScrollRequestID: UUID?
@@ -173,6 +178,7 @@ extension CodeTextView {
             fileKind: FileKind?,
             revealRequest: RevealRequest? = nil,
             fontSize: CGFloat = EditorTheme.defaultFontSize,
+            palette: EditorPalette = .system,
             openDocumentIDs: Set<UUID>? = nil,
             wrapsLines: Bool = true,
             scrollRequest: EditorScrollRequest? = nil
@@ -181,6 +187,7 @@ extension CodeTextView {
             let isNewDocument = documentID != self.documentID
             let isNewKind = fileKind != self.fileKind
             let isNewFontSize = fontSize != theme.font.pointSize
+            let isNewPalette = palette != theme.palette || !hasAppliedPalette
             if isNewDocument, let previousID = self.documentID {
                 savedStates[previousID] = DocumentState(undoManager: undoManager, selectedRange: textView.selectedRange(), text: textView.string)
             }
@@ -192,11 +199,16 @@ extension CodeTextView {
             if isNewKind {
                 highlighter = SyntaxHighlighters.highlighter(for: fileKind)
             }
-            if isNewFontSize {
-                theme = EditorTheme(fontSize: fontSize)
+            if isNewFontSize || isNewPalette {
+                theme = EditorTheme(fontSize: fontSize, palette: palette)
                 textView.font = theme.font
                 textView.typingAttributes = theme.baseAttributes
+            }
+            if isNewFontSize {
                 ruler?.matchEditorFontSize(fontSize)
+            }
+            if isNewPalette {
+                applyColors(of: palette, to: textView)
             }
             if wrapsLines != self.wrapsLines {
                 self.wrapsLines = wrapsLines
@@ -207,8 +219,8 @@ extension CodeTextView {
                 show(text, restoring: savedStates.removeValue(forKey: documentID), in: textView)
             } else if textView.string != text {
                 applyUndoableEdit(in: textView, replacingAllWith: text)
-            } else if isNewKind || isNewFontSize, let storage = textView.textStorage {
-                // Renamed to another file type, or a new font size: same text, restyled.
+            } else if isNewKind || isNewFontSize || isNewPalette, let storage = textView.textStorage {
+                // Renamed to another file type, a new font size or theme: same text, restyled.
                 applyStyle(to: NSRange(location: 0, length: storage.length), in: storage)
             }
             reveal(revealRequest, in: textView)
@@ -307,6 +319,19 @@ extension CodeTextView {
                 textView.setSelectedRange(Self.clamped(selection, toLength: (text as NSString).length))
             }
             textView.scrollRangeToVisible(textView.selectedRange())
+        }
+
+        /// Background, cursor, selection, current line and gutter; the text is restyled separately.
+        private func applyColors(of palette: EditorPalette, to textView: NSTextView) {
+            hasAppliedPalette = true
+            textView.backgroundColor = palette.background
+            textView.insertionPointColor = palette.cursor
+            var selection: [NSAttributedString.Key: Any] = [.backgroundColor: palette.selection]
+            selection[.foregroundColor] = palette.selectedText
+            textView.selectedTextAttributes = selection
+            (textView as? CodeEditorTextView)?.currentLineColor = palette.currentLine
+            textView.enclosingScrollView?.backgroundColor = palette.background
+            ruler?.apply(palette)
         }
 
         private func applyUndoableEdit(in textView: NSTextView, replacingAllWith text: String) {

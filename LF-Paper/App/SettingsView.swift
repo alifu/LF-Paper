@@ -12,6 +12,7 @@ struct SettingsView: View {
     @AppStorage(AppSettings.Key.jsonIndentation) private var indentation = JSONIndentationSetting.twoSpaces
     @AppStorage(AppSettings.Key.autosaves) private var autosaves = false
     @AppStorage(AppSettings.Key.wrapsLines) private var wrapsLines = AppSettings.defaultWrapsLines
+    @AppStorage(AppSettings.Key.editorTheme) private var editorTheme = EditorThemeSetting.system
     @AppStorage(AppSettings.Key.unsavedChangesOnClose) private var closeBehavior = UnsavedChangesOnClose.ask
 
     var body: some View {
@@ -33,6 +34,12 @@ struct SettingsView: View {
                         .frame(width: 44, alignment: .trailing)
                 }
             }
+
+            Picker("Editor theme:", selection: $editorTheme) {
+                ForEach(EditorThemeSetting.allCases) { Text($0.title).tag($0) }
+            }
+            .fixedSize()
+            Caption("Hyrule (by Dayle Rees, from Rainglow) uses Hyrule Light in light mode.")
 
             Toggle("Wrap long lines (⌥⌘L)", isOn: $wrapsLines)
             Caption("When off, long lines scroll sideways. The scratchpad always wraps.")

@@ -19,6 +19,9 @@ struct EditorPane: View {
     let model: WorkspaceModel
     @AppStorage(AppSettings.Key.editorFontSize) private var fontSize = AppSettings.defaultFontSize
     @AppStorage(AppSettings.Key.wrapsLines) private var wrapsLines = AppSettings.defaultWrapsLines
+    @AppStorage(AppSettings.Key.editorTheme) private var editorTheme = EditorThemeSetting.system
+    /// Follows Settings › Appearance and the system, so Hyrule switches between its variants.
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         if let content {
@@ -34,6 +37,7 @@ struct EditorPane: View {
                     documentID: content.id,
                     fileKind: content.fileKind,
                     fontSize: CGFloat(AppSettings.clampedFontSize(fontSize)),
+                    palette: EditorPalette.palette(for: editorTheme, isDark: colorScheme == .dark),
                     openDocumentIDs: model.editorDocumentIDs,
                     wrapsLines: model.wrapsLines(preference: wrapsLines),
                     revealRequest: model.revealRequest,
