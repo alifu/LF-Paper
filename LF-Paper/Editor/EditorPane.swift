@@ -38,7 +38,9 @@ struct EditorPane: View {
                     wrapsLines: model.wrapsLines(preference: wrapsLines),
                     revealRequest: model.revealRequest,
                     onTextChange: content.onTextChange,
-                    onSelectionChange: { model.noteSelection($1, in: $0) }
+                    onSelectionChange: { model.noteSelection($1, in: $0) },
+                    scrollRequest: model.scrollSync.editorRequest(for: content.id),
+                    onScrollLine: { model.editorDidScroll(toLine: $1, in: $0) }
                 )
             }
         } else {

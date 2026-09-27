@@ -56,6 +56,11 @@ struct WorkspaceCommands: Commands {
                 .disabled(workspace?.activeTabHasUnsavedChanges != true)
             Button("Compare with Last Commit") { compareWithLastCommit() }
                 .disabled(workspace?.document == nil || workspace?.isInGitRepository != true)
+            Divider()
+            Button("Export as HTML…") { workspace.map { MarkdownExportPanel.export(.html, from: $0) } }
+                .disabled(workspace?.isMarkdownDocument != true)
+            Button("Export as PDF…") { workspace.map { MarkdownExportPanel.export(.pdf, from: $0) } }
+                .disabled(workspace?.isMarkdownDocument != true)
         }
         CommandGroup(after: .sidebar) {
             viewItems

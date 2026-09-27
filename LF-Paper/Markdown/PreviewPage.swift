@@ -26,8 +26,8 @@ nonisolated enum PreviewPage {
         """
     }
 
-    /// GitHub-like typography; colors follow the system appearance.
-    private static let stylesheet = """
+    /// GitHub-like typography; colors follow the system appearance. Also used by HTML export.
+    static let stylesheet = """
         :root {
           --fg: #1f2328; --muted: #59636e; --border: #d1d9e0; --link: #0969da;
           --code-bg: rgba(129, 139, 152, 0.12); --bg: #ffffff;

@@ -118,6 +118,59 @@ final class CodeTextViewCoordinatorTests {
         #expect(coordinator.undoManager(for: textView) !== firstUndo)
     }
 
+    // MARK: Scroll sync
+
+    private static let manyLines = (1...300).map { "Line \($0) of the document." }.joined(separator: "\n")
+
+    private func scrollEditor(toY y: CGFloat) throws {
+        let clip = try #require(textView.enclosingScrollView?.contentView)
+        clip.scroll(to: NSPoint(x: 0, y: y))
+        textView.enclosingScrollView?.reflectScrolledClipView(clip)
+    }
+
+    @Test func reportsTheTopVisibleLineWhenScrolled() throws {
+        var reported: [(UUID, Double)] = []
+        coordinator.onScrollLine = { reported.append(($0, $1)) }
+        let id = UUID()
+        coordinator.update(text: Self.manyLines, documentID: id, fileKind: .markdown)
+        let lineHeight = try #require(textView.layoutManager?.defaultLineHeight(for: textView.font!))
+
+        try scrollEditor(toY: textView.textContainerOrigin.y + 49.5 * lineHeight)
+
+        let last = try #require(reported.last)
+        #expect(last.0 == id)
+        #expect(abs(last.1 - 50.5) < 0.2, "top line \(last.1)")
+    }
+
+    @Test func scrollRequestsPutTheLineAtTheTopWithoutEchoing() throws {
+        var reported: [Double] = []
+        coordinator.onScrollLine = { reported.append($1) }
+        coordinator.update(text: Self.manyLines, documentID: UUID(), fileKind: .markdown)
+
+        coordinator.update(text: Self.manyLines, documentID: coordinator.currentDocumentID!, fileKind: .markdown, scrollRequest: EditorScrollRequest(line: 120))
+
+        // AppKit may re-tile and report where the text was; the requested line itself never echoes back.
+        #expect(!reported.contains { $0 > 2 }, "a requested scroll isn't reported back: \(reported)")
+        let top = try #require(coordinator.topVisibleLine())
+        #expect(abs(top - 120) < 0.2, "top line \(top)")
+    }
+
+    @Test func eachScrollRequestIsAppliedOnce() throws {
+        let request = EditorScrollRequest(line: 80)
+        coordinator.update(text: Self.manyLines, documentID: UUID(), fileKind: .markdown, scrollRequest: request)
+        try scrollEditor(toY: 0)
+
+        coordinator.update(text: Self.manyLines, documentID: coordinator.currentDocumentID!, fileKind: .markdown, scrollRequest: request)
+
+        #expect(try #require(coordinator.topVisibleLine()) < 2)
+    }
+
+    @Test func anEmptyDocumentIsAtLineOne() {
+        coordinator.update(text: "", documentID: UUID(), fileKind: .markdown)
+
+        #expect(coordinator.topVisibleLine() == 1)
+    }
+
     // MARK: Line wrapping
 
     private static let longLine = String(repeating: "wide ", count: 400)

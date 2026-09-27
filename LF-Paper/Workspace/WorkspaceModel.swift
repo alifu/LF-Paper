@@ -83,6 +83,10 @@ final class WorkspaceModel {
     /// Changes whenever Search in Folder should take keyboard focus.
     private(set) var searchFocusRequest: UUID?
     let search = FolderSearchSession()
+    /// Where the editor and the Markdown preview scroll to follow each other.
+    let scrollSync = ScrollSync()
+    /// The headings of the Markdown file, for the Outline sidebar.
+    let outline = OutlineSession()
     /// Validation and tree for the open document when it's JSON.
     let json = JSONSession()
     /// The latest request for the editor to select and show a range (a JSON error or tree value).

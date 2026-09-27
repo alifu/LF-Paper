@@ -16,7 +16,9 @@ struct PreviewPane: View {
                 MarkdownPreviewView(
                     markdown: document.text,
                     documentURL: document.url,
-                    workspaceRoot: model.rootURL
+                    workspaceRoot: model.rootURL,
+                    scrollTarget: model.scrollSync.previewTarget(for: document.id),
+                    onScroll: { model.previewDidScroll(toLine: $0, in: document.id) }
                 )
             case .json:
                 JSONTreePane(model: model)

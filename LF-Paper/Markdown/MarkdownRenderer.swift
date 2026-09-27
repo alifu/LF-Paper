@@ -17,14 +17,17 @@ nonisolated enum MarkdownRenderer {
     /// cmark registers its extensions once per process; `static let` makes that happen exactly once.
     private static let extensionsRegistered: Void = cmark_gfm_core_extensions_ensure_registered()
 
-    /// Renders off the main thread so large documents don't stall typing.
+    /// Renders off the main thread so large documents don't stall typing. Blocks carry
+    /// `data-sourcepos="line:column-line:column"`, so the preview can follow the editor.
     @concurrent
     static func renderHTML(_ markdown: String) async -> String {
-        html(from: markdown)
+        html(from: markdown, includesSourcePositions: true)
     }
 
-    static func html(from markdown: String) -> String {
+    /// `includesSourcePositions` is for the preview's scroll sync; exports leave it out.
+    static func html(from markdown: String, includesSourcePositions: Bool = false) -> String {
         _ = extensionsRegistered
+        let options = includesSourcePositions ? Self.options | CMARK_OPT_SOURCEPOS : Self.options
         // cmark only returns NULL when it runs out of memory; an empty preview is the sane fallback.
         guard let parser = cmark_parser_new(options) else { return "" }
         defer { cmark_parser_free(parser) }

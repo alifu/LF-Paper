@@ -39,6 +39,8 @@ extension WorkspaceModel {
 enum SidebarMode: Hashable {
     case files
     case search
+    /// The headings of the Markdown file being edited.
+    case outline
 }
 
 /// Search in Folder: running a search over the indexed files and opening a match.

@@ -186,6 +186,17 @@ final class LF_PaperUITests: XCTestCase {
     }
 
     @MainActor
+    func testOutlineListsTheHeadings() throws {
+        openFile("README.md")
+        app.radioButtons["Outline"].click()
+
+        let heading = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Heading level 1: Fixture'")).firstMatch
+        XCTAssertTrue(heading.waitForExistence(timeout: Self.timeout), "the README's heading is listed")
+        heading.click()
+        XCTAssertTrue(editorText().hasPrefix("# Fixture"))
+    }
+
+    @MainActor
     func testCompareTwoFiles() throws {
         waitFor("file-data.json").rightClick()
         app.menuItems["Compare as Left"].click()

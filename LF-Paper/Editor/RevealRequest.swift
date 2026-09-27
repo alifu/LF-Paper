@@ -15,3 +15,10 @@ nonisolated struct RevealRequest: Equatable, Sendable {
     /// Flash the range like Find does; off when quietly putting back a remembered selection.
     var highlights = true
 }
+
+/// A one-off request to scroll the editor so a (fractional, 1-based) line is at the top,
+/// such as when the preview scrolls or a heading is chosen in the outline.
+nonisolated struct EditorScrollRequest: Equatable, Sendable {
+    let id = UUID()
+    let line: Double
+}

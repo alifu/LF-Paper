@@ -33,6 +33,13 @@ enum OffscreenRenderer {
         return PixelCounter.count(in: bitmap) { isDark ? $0 > 0.5 : $0 < 0.6 }
     }
 
+    /// Pixels whose brightness differs clearly from the background (sampled at the top-left corner).
+    /// Works for dimmed text, such as a sidebar in a window that isn't key.
+    static func pixelsStandingOut(in bitmap: NSBitmapImageRep, by margin: CGFloat = 0.15) -> Int {
+        guard let background = bitmap.colorAt(x: 0, y: 0)?.usingColorSpace(.deviceRGB)?.brightnessComponent else { return 0 }
+        return PixelCounter.count(in: bitmap) { abs($0 - background) > margin }
+    }
+
     /// The same count for an empty window of `size`, the baseline to compare against.
     static func blankContentPixels(size: NSSize, appearance: NSAppearance.Name) throws -> Int {
         let blank = try render(Color(nsColor: .windowBackgroundColor), size: size, appearance: appearance)

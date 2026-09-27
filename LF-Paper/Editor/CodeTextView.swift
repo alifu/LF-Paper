@@ -23,6 +23,10 @@ struct CodeTextView: NSViewRepresentable {
     let onTextChange: @MainActor (String) -> Void
     /// The selection of the showing document, as it changes (for restoring tabs later).
     var onSelectionChange: @MainActor (UUID, NSRange) -> Void = { _, _ in }
+    /// Scrolls a line to the top once per request (the preview scrolled, or a heading was chosen).
+    var scrollRequest: EditorScrollRequest?
+    /// The top visible line as the user scrolls, for the preview to follow.
+    var onScrollLine: @MainActor (UUID, Double) -> Void = { _, _ in }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(onTextChange: onTextChange)
@@ -38,6 +42,7 @@ struct CodeTextView: NSViewRepresentable {
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         context.coordinator.onTextChange = onTextChange
         context.coordinator.onSelectionChange = onSelectionChange
+        context.coordinator.onScrollLine = onScrollLine
         updateCoordinator(context.coordinator)
     }
 
@@ -49,7 +54,8 @@ struct CodeTextView: NSViewRepresentable {
             revealRequest: revealRequest,
             fontSize: fontSize,
             openDocumentIDs: openDocumentIDs,
-            wrapsLines: wrapsLines
+            wrapsLines: wrapsLines,
+            scrollRequest: scrollRequest
         )
     }
 
@@ -115,6 +121,7 @@ extension CodeTextView {
 
         var onTextChange: @MainActor (String) -> Void
         var onSelectionChange: @MainActor (UUID, NSRange) -> Void = { _, _ in }
+        var onScrollLine: @MainActor (UUID, Double) -> Void = { _, _ in }
         private weak var textView: NSTextView?
         private weak var ruler: LineNumberRulerView?
         private var documentID: UUID?
@@ -127,6 +134,11 @@ extension CodeTextView {
         private var theme = EditorTheme.standard
         /// `nil` until the first update, so the first one always applies the setting.
         private var wrapsLines: Bool?
+        private var lastScrollRequestID: UUID?
+        /// Set while scrolling on request, so that scroll isn't reported back as the user's.
+        private var isScrollingOnRequest = false
+        /// Line starts of the current text; rebuilt after edits.
+        private var cachedLineIndex: LineIndex?
 
         init(onTextChange: @escaping @MainActor (String) -> Void) {
             self.onTextChange = onTextChange
@@ -137,7 +149,18 @@ extension CodeTextView {
             self.ruler = ruler
             textView.delegate = self
             textView.textStorage?.delegate = self
+            if let clipView = textView.enclosingScrollView?.contentView {
+                clipView.postsBoundsChangedNotifications = true
+                NotificationCenter.default.addObserver(
+                    self,
+                    selector: #selector(clipViewDidScroll),
+                    name: NSView.boundsDidChangeNotification,
+                    object: clipView
+                )
+            }
         }
+
+        var currentDocumentID: UUID? { documentID }
 
         /// Loads text for another document (restoring its undo history and selection if it was shown
         /// before). For the same document, text changed outside the editor (Format, Minify, revert)
@@ -149,7 +172,8 @@ extension CodeTextView {
             revealRequest: RevealRequest? = nil,
             fontSize: CGFloat = EditorTheme.defaultFontSize,
             openDocumentIDs: Set<UUID>? = nil,
-            wrapsLines: Bool = true
+            wrapsLines: Bool = true,
+            scrollRequest: EditorScrollRequest? = nil
         ) {
             guard let textView else { return }
             let isNewDocument = documentID != self.documentID
@@ -186,6 +210,65 @@ extension CodeTextView {
                 applyStyle(to: NSRange(location: 0, length: storage.length), in: storage)
             }
             reveal(revealRequest, in: textView)
+            if let scrollRequest, scrollRequest.id != lastScrollRequestID {
+                lastScrollRequestID = scrollRequest.id
+                scroll(toLine: scrollRequest.line, in: textView)
+            }
+        }
+
+        // MARK: Scroll sync
+
+        /// The (fractional, 1-based) line at the top of the editor: 12.4 is 40% into line 12,
+        /// measured through its wrapped height.
+        func topVisibleLine() -> Double? {
+            guard let textView, let layoutManager = textView.layoutManager, let container = textView.textContainer else { return nil }
+            let string = textView.string as NSString
+            guard string.length > 0 else { return 1 }
+            let top = max(textView.visibleRect.minY - textView.textContainerOrigin.y, 0)
+            let glyph = layoutManager.glyphIndex(for: NSPoint(x: 0, y: top), in: container)
+            let character = min(layoutManager.characterIndexForGlyph(at: glyph), string.length - 1)
+            let paragraph = string.paragraphRange(for: NSRange(location: character, length: 0))
+            let rect = layoutManager.boundingRect(
+                forGlyphRange: layoutManager.glyphRange(forCharacterRange: paragraph, actualCharacterRange: nil),
+                in: container
+            )
+            let fraction = rect.height > 0 ? min(max((top - rect.minY) / rect.height, 0), 0.999) : 0
+            return Double(lineIndex(of: string).lineNumber(at: paragraph.location)) + fraction
+        }
+
+        private func scroll(toLine line: Double, in textView: NSTextView) {
+            guard let layoutManager = textView.layoutManager, let container = textView.textContainer else { return }
+            let string = textView.string as NSString
+            let lines = lineIndex(of: string)
+            let clamped = min(max(line, 1), Double(lines.lineCount))
+            let start = lines.lineStarts[Int(clamped) - 1]
+            let paragraph = string.paragraphRange(for: NSRange(location: min(start, string.length), length: 0))
+            let rect = layoutManager.boundingRect(
+                forGlyphRange: layoutManager.glyphRange(forCharacterRange: paragraph, actualCharacterRange: nil),
+                in: container
+            )
+            let y = rect.minY + (clamped - clamped.rounded(.down)) * rect.height + textView.textContainerOrigin.y
+            // Layout is lazy: lay out one screen past the target and grow the view to it, or the
+            // scroll is clamped short of the line. Cheaper than laying out a whole large document.
+            // Resizing moves the clip view too, so nothing here is reported as the user's scrolling.
+            isScrollingOnRequest = true
+            defer { isScrollingOnRequest = false }
+            let visibleHeight = textView.visibleRect.height
+            layoutManager.ensureLayout(forBoundingRect: NSRect(x: 0, y: rect.minY, width: container.size.width, height: visibleHeight * 2), in: container)
+            textView.sizeToFit()
+            textView.scroll(NSPoint(x: textView.visibleRect.minX, y: y))
+        }
+
+        @objc private func clipViewDidScroll() {
+            guard !isScrollingOnRequest, let documentID, let line = topVisibleLine() else { return }
+            onScrollLine(documentID, line)
+        }
+
+        private func lineIndex(of string: NSString) -> LineIndex {
+            if let cachedLineIndex { return cachedLineIndex }
+            let index = LineIndex(text: string)
+            cachedLineIndex = index
+            return index
         }
 
         /// Wrapping: the text container follows the view's width. Not wrapping: the container is
@@ -246,6 +329,7 @@ extension CodeTextView {
         }
 
         private func replaceText(in textView: NSTextView, with text: String) {
+            cachedLineIndex = nil
             isReplacingText = true
             textView.string = text
             isReplacingText = false
@@ -263,6 +347,7 @@ extension CodeTextView {
         }
 
         func textDidChange(_ notification: Notification) {
+            cachedLineIndex = nil
             guard !isReplacingText, let textView else { return }
             onTextChange(textView.string)
         }

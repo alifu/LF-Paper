@@ -21,6 +21,7 @@ struct SidebarView: View {
             Picker("Sidebar", selection: $model.sidebarMode) {
                 Image(systemName: "folder").help("Files").accessibilityLabel("Files").tag(SidebarMode.files)
                 Image(systemName: "magnifyingglass").help("Search in Folder (⇧⌘F)").accessibilityLabel("Search").tag(SidebarMode.search)
+                Image(systemName: "list.bullet.indent").help("Outline of the Markdown file").accessibilityLabel("Outline").tag(SidebarMode.outline)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -29,6 +30,7 @@ struct SidebarView: View {
             switch model.sidebarMode {
             case .files: files
             case .search: FolderSearchView(model: model)
+            case .outline: OutlineView(model: model)
             }
         }
     }

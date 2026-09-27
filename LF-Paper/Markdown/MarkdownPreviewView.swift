@@ -11,6 +11,10 @@ struct MarkdownPreviewView: NSViewRepresentable {
     let markdown: String
     let documentURL: URL
     let workspaceRoot: URL?
+    /// Where the editor scrolled; each target is applied once.
+    var scrollTarget: ScrollSync.PreviewTarget?
+    /// Where the reader scrolled the preview, as a source line.
+    var onScroll: (Double) -> Void = { _ in }
 
     func makeCoordinator() -> MarkdownPreviewController {
         MarkdownPreviewController()
@@ -21,7 +25,13 @@ struct MarkdownPreviewView: NSViewRepresentable {
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
-        context.coordinator.workspaceRoot = workspaceRoot
-        context.coordinator.scheduleRender(markdown: markdown, documentURL: documentURL)
+        let controller = context.coordinator
+        controller.workspaceRoot = workspaceRoot
+        controller.onScroll = onScroll
+        controller.scheduleRender(markdown: markdown, documentURL: documentURL)
+        if let scrollTarget, scrollTarget.id != controller.lastScrollTargetID {
+            controller.lastScrollTargetID = scrollTarget.id
+            controller.scroll(toLine: scrollTarget.line)
+        }
     }
 }
