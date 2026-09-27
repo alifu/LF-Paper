@@ -16,6 +16,41 @@ nonisolated struct TabSession: Codable, Equatable, Sendable {
     let selections: [String: NSRange]
 }
 
+nonisolated extension TabSession {
+    /// The session for `tabs` in the folder at `root`. Tabs outside the folder aren't remembered.
+    static func make(from tabs: DocumentTabs, root: URL, selections: [UUID: NSRange]) -> TabSession {
+        let paths = Dictionary(uniqueKeysWithValues: tabs.documents.compactMap { document in
+            document.url.components(below: root).map { (document.id, $0.joined(separator: "/")) }
+        })
+        let selectionsByPath = Dictionary(uniqueKeysWithValues: paths.compactMap { id, path in
+            selections[id].map { (path, $0) }
+        })
+        return TabSession(
+            files: tabs.documents.compactMap { paths[$0.id] },
+            activeFile: tabs.active.flatMap { paths[$0.id] },
+            selections: selectionsByPath
+        )
+    }
+
+    /// Reopens the session's tabs in `folder`. `read` returns a file's text, or `nil` when
+    /// it's gone or unreadable; such files are skipped. Also returns each tab's remembered
+    /// selection, to put back when the tab first shows.
+    func restore(in folder: URL, reading read: (URL) -> String?) -> (tabs: DocumentTabs, pendingSelections: [UUID: NSRange]) {
+        var restored = DocumentTabs.empty
+        var pending: [UUID: NSRange] = [:]
+        var activeID: UUID?
+        for path in files {
+            let url = folder.appending(path: path, directoryHint: .notDirectory)
+            guard let text = read(url) else { continue }
+            let document = OpenDocument(url: url, text: text)
+            restored = restored.opening(document)
+            pending[document.id] = selections[path]
+            if path == activeFile { activeID = document.id }
+        }
+        return (activeID.map(restored.activating) ?? restored, pending)
+    }
+}
+
 /// Stores the tab sessions of the most recently used folders in the settings.
 nonisolated struct TabSessionStore {
     static let storageKey = "workspace.tabSessions"

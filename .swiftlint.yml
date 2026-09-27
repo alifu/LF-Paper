@@ -1,0 +1,14 @@
+# Run by the SwiftLint build tool plugin (SwiftLintPlugins, pinned in the project) on every
+# build of the app target, so a violation fails the build.
+# Only file length is checked for now: app sources must stay under the 800-line soft limit,
+# so large files are split before they become hard to work with.
+# Tests and UI tests are exempt: the plugin runs on the app target only.
+only_rules:
+  - file_length
+
+included:
+  - LF-Paper
+
+file_length:
+  warning: 800
+  error: 800

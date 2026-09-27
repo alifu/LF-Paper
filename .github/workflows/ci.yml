@@ -51,6 +51,7 @@ jobs:
             -destination 'platform=macOS' \
             -only-testing:LF-PaperTests \
             -enableCodeCoverage YES \
+            -skipPackagePluginValidation \
             -clonedSourcePackagesDirPath "$PACKAGES_DIR" \
             -resultBundlePath "$RESULT_BUNDLE" \
             CODE_SIGN_IDENTITY=- \
