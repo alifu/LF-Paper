@@ -15,6 +15,7 @@ nonisolated enum AppSettings {
         static let unsavedChangesOnClose = "settings.unsavedChangesOnClose"
         static let wrapsLines = "settings.wrapsLines"
         static let editorTheme = "settings.editorTheme"
+        static let customTheme = "settings.customTheme"
     }
 
     enum Zoom {
@@ -24,6 +25,8 @@ nonisolated enum AppSettings {
     }
 
     static let defaultFontSize = 13.0
+    /// Rainglow's GitHub, until someone picks another theme.
+    static let defaultEditorTheme = EditorThemeSetting.github
     /// Long lines run past the edge and scroll sideways, as in code editors. The scratchpad always wraps.
     static let defaultWrapsLines = false
     static let fontSizeRange: ClosedRange<Double> = 9...32

@@ -98,6 +98,79 @@ struct EditorPaletteTests {
         #expect(EditorPalette.palette(for: .system, isDark: false) == .system)
     }
 
+    // MARK: GitHub and custom themes
+
+    @Test func githubDarkMatchesRainglowWithReadableComments() {
+        let palette = EditorPalette.githubDark
+        #expect(palette.background == HexColor("#333333")?.nsColor)
+        #expect(palette.text == HexColor("#ffffff")?.nsColor)
+        #expect(palette.currentLine == HexColor("#3b3b3b")?.nsColor)
+        #expect(palette.selection == HexColor("#00808055")?.nsColor)
+        #expect(palette.style(for: .key).color == HexColor("#66c4c4")?.nsColor)
+        #expect(palette.style(for: .link).color == HexColor("#7385bc")?.nsColor)
+        #expect(palette.style(for: .string).color == HexColor("#e53d67")?.nsColor)
+        #expect(palette.style(for: .comment).color == HexColor("#8a8a8a")?.nsColor) // Rainglow: #555555
+    }
+
+    @Test func githubLightMatchesRainglowWithReadableComments() {
+        let palette = EditorPalette.githubLight
+        #expect(palette.background == HexColor("#ffffff")?.nsColor)
+        #expect(palette.text == HexColor("#555555")?.nsColor)
+        #expect(palette.style(for: .key).color == HexColor("#008080")?.nsColor)
+        #expect(palette.style(for: .string).color == HexColor("#dd1144")?.nsColor)
+        #expect(palette.style(for: .comment).color == HexColor("#8a8882")?.nsColor) // Rainglow: #b8b6b1
+    }
+
+    @Test func githubIsTheDefaultTheme() {
+        #expect(AppSettings.defaultEditorTheme == .github)
+        #expect(EditorPalette.palette(for: .github, isDark: true) == .githubDark)
+        #expect(EditorPalette.palette(for: .github, isDark: false) == .githubLight)
+    }
+
+    @Test func githubCommentsAreReadable() throws {
+        for (comment, background) in [("#8a8a8a", "#333333"), ("#8a8882", "#ffffff")] {
+            let ratio = HexColor.contrastRatio(try #require(HexColor(comment)), try #require(HexColor(background)))
+            #expect(ratio >= 3.5)
+        }
+    }
+
+    @Test func customThemeUsesItsOwnColoursPerAppearance() {
+        var theme = CustomTheme.standard
+        theme.dark.background = "#101010"
+        theme.light.string = "#123456"
+        #expect(EditorPalette.palette(for: .custom, isDark: true, customTheme: theme).background == HexColor("#101010")?.nsColor)
+        #expect(EditorPalette.palette(for: .custom, isDark: false, customTheme: theme).style(for: .string).color == HexColor("#123456")?.nsColor)
+    }
+
+    @Test func customThemeStartsAsGitHub() {
+        #expect(EditorPalette.palette(for: .custom, isDark: true) == .githubDark)
+        #expect(EditorPalette.palette(for: .custom, isDark: false) == .githubLight)
+    }
+
+    @Test func customThemeSurvivesTheSettingsRoundTrip() {
+        var theme = CustomTheme.standard
+        theme.light.keyword = "#abcdef"
+        #expect(CustomTheme(json: theme.json) == theme)
+    }
+
+    @Test(arguments: ["", "not json", "{}", "{\"light\": 1}"])
+    func unreadableCustomThemeIsNil(json: String) {
+        #expect(CustomTheme(json: json) == nil)
+    }
+
+    @Test func aCustomThemeWithBadHexFallsBackToGitHub() {
+        var theme = CustomTheme.standard
+        theme.dark.text = "nope"
+        #expect(EditorPalette(colors: theme.dark) == nil)
+        #expect(EditorPalette.palette(for: .custom, isDark: true, customTheme: theme) == .githubDark)
+    }
+
+    @Test func hexStringRoundTrips() throws {
+        #expect(try #require(HexColor("#2d2c2b")).hexString == "#2d2c2b")
+        #expect(try #require(HexColor("#569e1655")).hexString == "#569e1655")
+        #expect(HexColor(NSColor(srgbRed: 1, green: 0, blue: 0.5, alpha: 1))?.hexString == "#ff0080")
+    }
+
     // MARK: Contrast (WCAG 2)
 
     @Test func contrastRatiosFollowWCAG() throws {

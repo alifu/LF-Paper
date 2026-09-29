@@ -28,6 +28,19 @@ nonisolated struct HexColor: Equatable, Sendable {
         self.init(red: channel(24), green: channel(16), blue: channel(8), alpha: channel(0))
     }
 
+    /// `nil` if the colour can't be expressed in sRGB.
+    init?(_ color: NSColor) {
+        guard let srgb = color.usingColorSpace(.sRGB) else { return nil }
+        self.init(red: srgb.redComponent, green: srgb.greenComponent, blue: srgb.blueComponent, alpha: srgb.alphaComponent)
+    }
+
+    /// `#rrggbb`, or `#rrggbbaa` when not opaque.
+    var hexString: String {
+        func byte(_ value: Double) -> Int { Int((min(max(value, 0), 1) * 255).rounded()) }
+        let opaque = String(format: "#%02x%02x%02x", byte(red), byte(green), byte(blue))
+        return alpha >= 1 ? opaque : opaque + String(format: "%02x", byte(alpha))
+    }
+
     func withAlpha(_ alpha: Double) -> HexColor {
         HexColor(red: red, green: green, blue: blue, alpha: alpha)
     }
@@ -72,15 +85,21 @@ nonisolated struct TokenStyle: Equatable, @unchecked Sendable {
 nonisolated enum EditorThemeSetting: String, CaseIterable, Identifiable, Sendable {
     /// The system's colours, which follow light and dark mode.
     case system
+    /// Rainglow's GitHub, with GitHub Light in light mode.
+    case github
     /// Rainglow's Hyrule, with Hyrule Light in light mode.
     case hyrule
+    /// The user's own colours, from Settings › Edit Custom Theme.
+    case custom
 
     var id: Self { self }
 
     var title: String {
         switch self {
         case .system: "System"
+        case .github: "GitHub"
         case .hyrule: "Hyrule"
+        case .custom: "Custom"
         }
     }
 }
@@ -98,17 +117,23 @@ nonisolated struct EditorPalette: Equatable, @unchecked Sendable {
     /// Behind the line with the cursor; `nil` draws no highlight.
     let currentLine: NSColor?
     let gutterText: NSColor
-    private let tokens: [TokenKind: TokenStyle]
+    let tokens: [TokenKind: TokenStyle]
 
     func style(for kind: TokenKind) -> TokenStyle {
         tokens[kind] ?? TokenStyle(color: nil)
     }
 
-    /// The palette to draw with: Hyrule's variant follows the editor's appearance.
-    static func palette(for setting: EditorThemeSetting, isDark: Bool) -> EditorPalette {
+    /// The palette to draw with: a theme's light or dark variant follows the editor's appearance.
+    static func palette(
+        for setting: EditorThemeSetting,
+        isDark: Bool,
+        customTheme: CustomTheme = .standard
+    ) -> EditorPalette {
         switch setting {
         case .system: .system
+        case .github: isDark ? .githubDark : .githubLight
         case .hyrule: isDark ? .hyruleDark : .hyruleLight
+        case .custom: EditorPalette(colors: isDark ? customTheme.dark : customTheme.light) ?? (isDark ? .githubDark : .githubLight)
         }
     }
 
@@ -138,63 +163,4 @@ nonisolated struct EditorPalette: Equatable, @unchecked Sendable {
             .keyword: TokenStyle(color: .systemPink, trait: .bold),
         ]
     )
-
-    /// Rainglow's Hyrule (hyrule.json) by Dayle Rees, MIT licensed.
-    static let hyruleDark = hyrule(HyruleColors(
-        background: "#2d2c2b", text: "#c0d5c1", gutter: "#615f5d", currentLine: "#353432",
-        selection: "#569e1655", cursor: "#f8f8f0", green: "#569e16", yellow: "#f5c504", orange: "#ce830d",
-        comment: "#716d6a", keyword: "#90c93f", number: "#f5c504"
-    ))
-
-    /// Rainglow's Hyrule Light (hyrule-light.json), with its three faintest colours darkened to be
-    /// readable on its background: strings `#ce830d` → `#8f5a06` (1.97:1 → 3.72:1), comments
-    /// `#93a594` → `#556856` (1.68:1 → 3.86:1) and numbers `#f5c504` → `#6b5500` (1.05:1 → 4.63:1).
-    static let hyruleLight = hyrule(HyruleColors(
-        background: "#c0d5c1", text: "#2d2c2b", gutter: "#83ac85", currentLine: "#b7cfb8",
-        selection: "#569e1633", cursor: "#222222", green: "#407710", yellow: "#b7950c", orange: "#8f5a06",
-        comment: "#556856", keyword: "#68912e", number: "#6b5500"
-    ))
-
-    /// One Hyrule variant, as hex; the names say which Rainglow scopes use each colour.
-    private struct HyruleColors {
-        let background, text, gutter, currentLine, selection, cursor: String
-        /// Headings, JSON keys and `true`/`false`/`null`.
-        let green: String
-        /// Bold, italic and links.
-        let yellow: String
-        /// Strings and inline code.
-        let orange: String
-        let comment, keyword, number: String
-    }
-
-    private static func hyrule(_ hex: HyruleColors) -> EditorPalette {
-        // The hex values are fixed above and covered by tests.
-        func color(_ value: String) -> NSColor { HexColor(value)!.nsColor }
-        let text = HexColor(hex.text)!
-        return EditorPalette(
-            background: color(hex.background),
-            text: text.nsColor,
-            cursor: color(hex.cursor),
-            selection: color(hex.selection),
-            selectedText: nil,
-            currentLine: color(hex.currentLine),
-            gutterText: color(hex.gutter),
-            tokens: [
-                .heading: TokenStyle(color: color(hex.green), trait: .bold),
-                .strong: TokenStyle(color: color(hex.yellow), trait: .bold),
-                .emphasis: TokenStyle(color: color(hex.yellow), trait: .italic),
-                .code: TokenStyle(color: color(hex.orange)),
-                .link: TokenStyle(color: color(hex.yellow)),
-                .quote: TokenStyle(color: color(hex.comment)),
-                .comment: TokenStyle(color: color(hex.comment)),
-                .listMarker: TokenStyle(color: color(hex.keyword)),
-                .key: TokenStyle(color: color(hex.green)),
-                .string: TokenStyle(color: color(hex.orange)),
-                .number: TokenStyle(color: color(hex.number)),
-                .literal: TokenStyle(color: color(hex.green)),
-                .punctuation: TokenStyle(color: text.withAlpha(0.6).nsColor),
-                .keyword: TokenStyle(color: color(hex.keyword), trait: .bold),
-            ]
-        )
-    }
 }

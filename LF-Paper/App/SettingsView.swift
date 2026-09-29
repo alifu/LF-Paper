@@ -12,7 +12,8 @@ struct SettingsView: View {
     @AppStorage(AppSettings.Key.jsonIndentation) private var indentation = JSONIndentationSetting.twoSpaces
     @AppStorage(AppSettings.Key.autosaves) private var autosaves = false
     @AppStorage(AppSettings.Key.wrapsLines) private var wrapsLines = AppSettings.defaultWrapsLines
-    @AppStorage(AppSettings.Key.editorTheme) private var editorTheme = EditorThemeSetting.system
+    @AppStorage(AppSettings.Key.editorTheme) private var editorTheme = AppSettings.defaultEditorTheme
+    @State private var isEditingCustomTheme = false
     @AppStorage(AppSettings.Key.unsavedChangesOnClose) private var closeBehavior = UnsavedChangesOnClose.ask
 
     var body: some View {
@@ -39,7 +40,10 @@ struct SettingsView: View {
                 ForEach(EditorThemeSetting.allCases) { Text($0.title).tag($0) }
             }
             .fixedSize()
-            Caption("Hyrule (by Dayle Rees, from Rainglow) uses Hyrule Light in light mode.")
+            if editorTheme == .custom {
+                Button("Edit Custom Theme…") { isEditingCustomTheme = true }
+            }
+            Caption(themeCaption)
 
             Toggle("Wrap long lines (⌥⌘L)", isOn: $wrapsLines)
             Caption("When off, long lines scroll sideways. The scratchpad always wraps.")
@@ -60,6 +64,16 @@ struct SettingsView: View {
         }
         .padding(20)
         .frame(width: 460)
+        .sheet(isPresented: $isEditingCustomTheme) { ThemeEditorView() }
+    }
+
+    private var themeCaption: String {
+        switch editorTheme {
+        case .system: "Follows the system's colours."
+        case .github: "GitHub (by Dayle Rees, from Rainglow) uses GitHub Light in light mode."
+        case .hyrule: "Hyrule (by Dayle Rees, from Rainglow) uses Hyrule Light in light mode."
+        case .custom: "Your own colours, for light and dark mode."
+        }
     }
 }
 

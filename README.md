@@ -44,8 +44,9 @@ Requires macOS 15 (Sequoia) or later to run. Building it needs Xcode 26.5.
   the last Git commit, with a side-by-side or unified diff.
 
 **Editor**
-- A choice of editor theme: the system's colours (light and dark), or Hyrule / Hyrule Light from
-  [Rainglow](https://rainglow.io).
+- A choice of editor theme: GitHub (the default), Hyrule, or the system's colours, each with a light and
+  a dark variant. GitHub and Hyrule are from [Rainglow](https://rainglow.io).
+- A custom theme: pick your own editor colours for light and dark mode in Settings › Editor theme › Custom.
 - Large files and very long lines are handled without slowing down typing.
 
 ## Development
@@ -63,6 +64,6 @@ it; command-line builds need `-skipPackagePluginValidation`, as above.
 
 ## Credits
 
-- **Hyrule** and **Hyrule Light** editor themes from [Rainglow](https://rainglow.io) by Dayle Rees (MIT License).
+- **GitHub**, **GitHub Light**, **Hyrule** and **Hyrule Light** editor themes from [Rainglow](https://rainglow.io) by Dayle Rees (MIT License).
 - [swift-cmark](https://github.com/swiftlang/swift-cmark) for Markdown (BSD 2-Clause License).
 - [Yams](https://github.com/jpsim/Yams) for YAML (MIT License).
