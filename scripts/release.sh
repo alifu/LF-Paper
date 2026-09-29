@@ -1,26 +1,6 @@
 #!/usr/bin/env bash
 #
-# Builds LF-Paper.zip for a GitHub release and writes the Homebrew cask for it
-# (alifu/homebrew-tap, installed with `brew install --cask alifu/tap/lf-paper`).
-#
-# By default the app is signed ad hoc and not notarized, like SimDeeplink: on first launch people
-# confirm it once in System Settings › Privacy & Security › Open Anyway.
-# With a paid Apple Developer account, set TEAM_ID to sign with Developer ID and notarize instead.
-# One-time setup for that:
-#   1. A "Developer ID Application" certificate in your keychain (Xcode › Settings › Accounts).
-#   2. Notarization credentials (an app-specific password from appleid.apple.com):
-#        xcrun notarytool store-credentials LF-Paper-notary \
-#          --apple-id you@example.com --team-id ABCDE12345
-#
-# Usage:
-#   scripts/release.sh                                       # ad hoc, not notarized
-#   TEAM_ID=ABCDE12345 scripts/release.sh                    # Developer ID + notarized
-#   TEAM_ID=ABCDE12345 NOTARY_PROFILE=LF-Paper-notary scripts/release.sh
-#
-# Then:
-#   1. Create a GitHub release tagged with the version (e.g. 1.0) and attach build/release/LF-Paper.zip.
-#   2. Copy build/release/lf-paper.rb to Casks/lf-paper.rb in alifu/homebrew-tap and push.
-# Raise MARKETING_VERSION for every release: `brew upgrade` only sees a new version number.
+# Builds LF-Paper.zip and its Homebrew cask.
 #
 set -euo pipefail
 
@@ -134,7 +114,4 @@ end
 RUBY
 
 printf '\nDone: %s (sha256 %s)\n' "$ZIP" "$SHA256"
-printf '\nNext:\n'
-printf '  1. Create a GitHub release tagged %s in %s and attach LF-Paper.zip.\n' "$VERSION" "$REPOSITORY"
-printf '  2. Copy %s to Casks/lf-paper.rb in alifu/homebrew-tap and push.\n\n' "$CASK"
 cat "$CASK"
