@@ -10,6 +10,40 @@ Requires macOS 15 (Sequoia) or later to run. Building it needs Xcode 26.5.
 
 ![JSON editor with tree view](.github/screenshots/json-tools.png)
 
+## Install
+
+With [Homebrew](https://brew.sh):
+
+```bash
+brew install --cask alifu/tap/lf-paper
+```
+
+Update and uninstall:
+
+```bash
+brew upgrade --cask lf-paper
+brew uninstall --cask lf-paper          # add --zap to also remove its settings and data
+```
+
+Or download `LF-Paper.zip` from the [latest release](https://github.com/alifu/LF-Paper/releases/latest),
+unzip it and drag `LF-Paper.app` into `/Applications`.
+
+### "LF-Paper can't be opened" warning
+
+LF-Paper isn't notarized by Apple (that needs a paid developer account), so macOS blocks it the
+first time you open it. You only have to allow it once:
+
+1. Open LF-Paper. macOS shows a warning that it couldn't verify the app; click **Done**.
+2. Open **System Settings › Privacy & Security** and scroll down to the **Security** section.
+3. Next to "LF-Paper was blocked to protect your Mac", click **Open Anyway**, then confirm with your
+   password or Touch ID and click **Open Anyway** again.
+
+Or, from the Terminal, remove the quarantine flag instead:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/LF-Paper.app
+```
+
 ## Features
 
 **Folder workspace**
